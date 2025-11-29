@@ -316,7 +316,7 @@ menu_tools() {
 
 while true; do
     MAIN=$(dialog --title "LUKS TUI Main Menu" --menu "Select a category:" 20 60 9 \
-        1 "Secure Storage Setup" \
+        1 "Setup initial persistent storage" \
         2 "LUKS Volume Management" \
         3 "Disk & Partition Tools" \
         4 "Mount / Unmount" \

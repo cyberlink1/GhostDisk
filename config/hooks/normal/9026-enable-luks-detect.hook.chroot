@@ -1,0 +1,4 @@
+#!/bin/bash
+systemctl enable luks-detect.service
+cd /bin
+ln -s busybox blkid

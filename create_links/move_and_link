@@ -1,0 +1,52 @@
+#!/bin/bash
+
+CONFIG="$HOME/Encrypted/.cl.cfg"
+
+while IFS='|' read -r state type item enc; do
+    [[ "$state" != "+" ]] && continue
+
+    # Expand paths
+    src="$HOME/$item"         # config uses paths relative to home (like .config/lxqt)
+    dest_root=$(eval echo "$enc")
+    dest="$dest_root/$item"   # preserve full relative path, including leading dots
+
+    echo "-----"
+    echo "[*] Processing: $item"
+    echo "    src:  $src"
+    echo "    dest: $dest"
+
+    # Ensure destination parent directory exists
+    mkdir -p "$(dirname "$dest")"
+
+    # If source does not exist, create empty structure
+    if [[ ! -e "$src" ]]; then
+        echo "    Source missing — creating empty target"
+
+        if [[ "$type" == "d" ]]; then
+            mkdir -p "$dest"
+        else
+            mkdir -p "$(dirname "$dest")"
+            touch "$dest"
+        fi
+
+    else
+        # Copy source into the encrypted location, preserving structure
+        echo "    Copying source into encrypted location"
+        cp -a "$src" "$dest"
+    fi
+
+    # Remove original
+    if [[ -e "$src" || -L "$src" ]]; then
+        echo "    Removing original source"
+        rm -rf "$src"
+    fi
+
+    # Ensure parent dir exists for symlink
+    mkdir -p "$(dirname "$src")"
+
+    # Create symlink
+    echo "    Linking $src -> $dest"
+    ln -s "$dest" "$src"
+
+done < "$CONFIG"
+

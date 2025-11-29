@@ -1,0 +1,90 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+unmount_partition() {
+    local partitions
+    partitions=$(mounted_partitions)
+    [ $? -ne 0 ] && error_exit "No mounted partitions found."
+
+    local letters="a b c d e f g h i j k l m n o p q r s t u v w x y z"
+    local letter_index=1
+
+    # Build dialog args
+    set --
+    local line
+    local old_ifs=$IFS
+    IFS='
+'
+    for line in $partitions; do
+        IFS=$old_ifs
+        local dev mp
+        dev=$(echo "$line" | cut -d' ' -f1)
+        mp=$(echo "$line" | cut -d' ' -f2)
+
+        local letter
+        letter=$(echo "$letters" | cut -d' ' -f $letter_index)
+        letter_index=$((letter_index + 1))
+
+        set -- "$@" "$letter" "$dev mounted on $mp"
+        IFS='
+'
+    done
+    IFS=$old_ifs
+
+    [ $# -eq 0 ] && error_exit "No dialog choices built."
+
+    # Show menu
+    local selection
+    selection=$(dialog --clear --title "Select Partition to Unmount" \
+        --menu "Choose a mounted partition:" 20 60 10 "$@" --stdout) || return 1
+
+    [ -z "$selection" ] && return 1
+
+    # Find selected partition
+    letter_index=1
+    local target_dev target_mp
+    IFS='
+'
+    for line in $partitions; do
+        IFS=$old_ifs
+        local dev mp
+        dev=$(echo "$line" | cut -d' ' -f1)
+        mp=$(echo "$line" | cut -d' ' -f2)
+
+        local letter
+        letter=$(echo "$letters" | cut -d' ' -f $letter_index)
+
+        if [ "$letter" = "$selection" ]; then
+            target_dev="$dev"
+            target_mp="$mp"
+            break
+        fi
+
+        letter_index=$((letter_index + 1))
+        IFS='
+'
+    done
+    IFS=$old_ifs
+
+    [ -z "$target_dev" ] && error_exit "Failed to find selection."
+
+    dialog --title "Unmounting" --infobox "Unmounting $target_mp..." 6 50
+    umount "$target_mp" || error_exit "Failed to unmount $target_mp"
+    rm -r $mp
+    # Close LUKS mapping if applicable
+    if echo "$target_dev" | grep -q '^/dev/mapper/'; then
+        local mapname
+        mapname=$(basename "$target_dev")
+        cryptsetup close "$mapname" 2>/dev/null
+        dialog --title "Closed" --msgbox \
+            "LUKS mapping $mapname closed." 8 50 --stdout
+    fi
+
+    dialog --title "Done" --msgbox \
+        "$target_dev unmounted successfully." 8 50 --stdout
+}
+
+# Run
+unmount_partition
+

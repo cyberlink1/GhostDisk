@@ -1,0 +1,40 @@
+#!/bin/bash
+# config/hooks/chroot/9000-lockdown-ufw.hook.chroot
+# Lockdown UFW for a desktop/laptop with Tor/I2P
+
+# Enable UFW
+ufw --force enable
+
+# Reset existing rules
+ufw --force reset
+
+# Default deny everything
+ufw default deny incoming
+ufw default deny outgoing
+
+# Allow outgoing to local network & loopback
+ufw allow out on lo
+ufw allow in on lo
+
+# Allow DNS (Tor/I2P need to resolve domains)
+ufw allow out 53
+
+# Allow HTTP/HTTPS for Tor/I2P bootstrap and general apps
+ufw allow out 80
+ufw allow out 443
+
+# Allow Tor specific ports if using Tor standalone
+# (Tor can also use SOCKS, but usually initiates outbound TCP)
+ufw allow out 9001/tcp     # OR adjust per your Tor config
+ufw allow out 9050/tcp     # Tor SOCKS port if needed
+
+# Allow I2P (default ports, adjust if you changed them)
+ufw allow out 7654/tcp
+ufw allow out 7655/tcp
+
+# Optional: allow SSH only if you need it locally
+# ufw allow in 22
+
+# Enable logging at low level
+ufw logging low
+

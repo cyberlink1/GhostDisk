@@ -1,0 +1,74 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+open_luks_volume() {
+    local entry dev closed_list
+    closed_list=""
+
+    # 1) Build a list of closed LUKS partitions
+    # list_luks_partition prints lines: <device> <UUID>
+    local lines old_ifs
+    lines=$(blkid 2>/dev/null | grep -i luks)
+    [ -z "$lines" ] && error_exit "No LUKS partitions found."
+
+    old_ifs=$IFS
+    IFS='
+'
+    for line in $lines; do
+        IFS=$old_ifs
+        dev=$(echo "$line" | cut -d: -f1)
+
+        # Skip if already open
+        if ! is_luks_open "$dev"; then
+            continue
+        fi
+
+        # Add to dialog list: device + UUID
+        uuid=$(echo "$line" | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')
+        closed_list="$closed_list$dev $uuid
+"
+        IFS='
+'
+    done
+    IFS=$old_ifs
+
+    [ -z "$closed_list" ] && error_exit "No closed LUKS partitions found."
+
+    set --
+    while read -r dev uuid; do
+	    set -- "$@" "$dev" "$dev - $uuid"
+	    done <<EOF
+$closed_list
+EOF
+
+     entry=$(dialog --clear --title "Select LUKS Partition" \
+        --menu "Choose a LUKS volume to open:" 20 70 10 \
+        "$@" \
+        --stdout)
+
+    dev="$entry"
+
+    # 3) Ask mapping name
+    local mapname
+    local devname
+    devname="${dev#/dev/}"
+    mapname=$(dialog --inputbox "Enter mapping name:" 10 50 "crypt-$devname" --stdout)
+    [ -z "$mapname" ] && error_exit "Mapping name cannot be empty."
+
+    # 4) Ask password
+    local pass
+    pass=$(ask_password_once "Enter password to unlock $dev:")
+    [ -z "$pass" ] && error_exit "Password entry cancelled."
+
+    # 5) Open LUKS
+    echo -n "$pass" | cryptsetup open "$dev" "$mapname" - || \
+        error_exit "Failed to open LUKS device."
+
+    dialog --title "Success" --msgbox \
+        "LUKS volume unlocked:\n\nDevice: $dev\nMapping: $mapname" \
+        10 50 --stdout
+}
+
+open_luks_volume
+

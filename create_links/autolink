@@ -1,0 +1,22 @@
+#!/bin/bash
+# Wait until ~/Encrypted is mounted, then run link script
+
+ENCRYPTED="$HOME/Encrypted"
+SCRIPT="/usr/bin/make_links"  # or make_links_only.sh
+TIMEOUT=120   # seconds to wait for mount
+INTERVAL=2   # polling interval
+
+echo "[*] Waiting for $ENCRYPTED to be mounted..."
+
+elapsed=0
+while ! mountpoint -q "$ENCRYPTED"; do
+    sleep $INTERVAL
+    elapsed=$((elapsed + INTERVAL))
+    if [ "$elapsed" -ge "$TIMEOUT" ]; then
+        echo "[!] Timeout waiting for $ENCRYPTED to be mounted, exiting."
+        exit 0
+    fi
+done
+
+echo "[+] $ENCRYPTED is mounted, running link script..."
+"$SCRIPT"

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+#APT_OPTIONS="--yes --purge --no-install-recommends"
+
+# Remove extra desktop meta-packages
+#apt-get purge $APT_OPTIONS gnome-desktop gnome-flashback-desktop kde-desktop cinnamon-desktop mate-desktop lxde-desktop lxqt-desktop 'cinnamon*' || true
+#apt-get autoremove $APT_OPTIONS
+#dpkg --remove --force-depends cinnamon cinnamon-common cinnamon-session cinnamon-settings-daemon cinnamon-control-center nemo muffin
+
+

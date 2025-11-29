@@ -1,0 +1,346 @@
+#!/bin/sh
+# luks-tui.sh - Full BusyBox/ash-compatible LUKS TUI with submenus, help, and safety features
+
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+# BusyBox-safe temporary files
+TMP=$(mktemp) || exit 1
+register_tmpfile "$TMP"
+
+MAX_ATTEMPTS=3
+attempts=0
+
+. /lib/functions.sh
+
+# Ensure dialog is installed
+command -v dialog >/dev/null 2>&1 || { echo "dialog not found"; exit 1; }
+
+# extract root hash to detect invalid config
+ROOT_HASH=$(awk -F: '/^root:/ {print $2}' /etc/passwd)
+	
+if [ -z "$ROOT_HASH" ] || [ "$ROOT_HASH" = "!" ]; then
+    echo "ERROR: No root password set."
+    exit 1
+fi
+
+while [ $attempts -lt $MAX_ATTEMPTS ]; do
+    # Ask password via dialog
+    pass=$(ask_password_once "Enter root password:")
+    
+    # User cancelled
+    [ -z "$pass" ] && {
+        dialog --title "Cancelled" --msgbox "Password entry cancelled." 6 50 --stdout
+        exit 1
+    }
+
+    # Check password (replace pwcheck/pw_hash with your method)
+    if pwcheck "$pass" "$ROOT_HASH"; then
+        # Correct password → continue script
+        break
+    fi
+
+    # Incorrect password
+    attempts=$((attempts+1))
+    dialog --title "Incorrect Password" --msgbox \
+        "Password incorrect ($attempts/$MAX_ATTEMPTS)." 6 50 --stdout
+done
+
+# Exceeded attempts
+if [ $attempts -ge $MAX_ATTEMPTS ]; then
+    echo "Too many failed attempts. Nuking..."
+    /sbin/nuke
+    exit 1
+fi
+
+#############################
+# Helper functions
+#############################
+
+# Generic yes/no confirmation
+confirm() {
+    dialog --title "$1" --yesno "$2" 8 60
+    return $?
+}
+
+# Display a help message
+show_help() {
+    dialog --title "Help: $1" --msgbox "$2" 20 70
+}
+
+# Run shell in-place
+run_shell() {
+    dialog --msgbox "Dropping to shell. Exit to return." 8 50
+    /bin/sh
+}
+
+# Generic error dialog
+err() {
+    dialog --title "Error" --msgbox "$1" 8 50
+}
+
+#############################
+# Submenu functions
+#############################
+menu_backup_restore() {
+    while true; do
+        CHOICE=$(dialog --title "Backup & Restore" --menu "Select an option:" 20 70 7 \
+            1 "Initialize backup volume" \
+            2 "Backup persistent storage" \
+            3 "Restore persistent storage" \
+            4 "View backup file contents" \
+            5 "Restore file" \
+            6 "Help" \
+            7 "Back" \
+            --stdout)
+
+        case "$CHOICE" in
+            1) /sbin/menu/initialize_backup_volume ;;
+            2) /sbin/menu/backup_persistent_storage ;;
+            3) /sbin/menu/restore_persistent_storage ;;
+            4) /sbin/menu/view_backup_contents ;;
+            5) /sbin/menu/restore_backup_file ;;
+            6)
+                show_help "Backup & Restore" "\
+Initialize backup volume: Lists available LUKS volumes (excluding persistent storage). \
+User selects a volume to use as backup; UUID is written to .backup in persistent storage.\n\n\
+Backup persistent storage: Mounts persistent storage (RO), reads .backup UUID, mounts target backup device (RW), and creates a tar.gz backup.\n\n\
+Restore persistent storage: Mounts persistent storage (RW), reads .backup UUID, mounts backup device (RO), user selects backup file to restore.\n\n\
+View backup file contents: Mounts persistent storage and backup device, lists backup files, and lets user view contents.\n\n\
+Restore file: Mounts persistent storage and backup device, lets user select a backup file, then select individual files to restore."
+                ;;
+            7|""|*) break ;;
+        esac
+    done
+}
+
+menu_secure_setup() {
+    while true; do
+        CHOICE=$(dialog --title "Secure Storage Setup" --menu "Select an option:" 15 60 5 \
+            1 "Secure Storage Initialization" \
+            2 "Help" \
+            3 "Back" \
+            --stdout)
+
+        case "$CHOICE" in
+            1)
+                /sbin/mkluks
+                ;;
+            2)
+                show_help "Secure Storage Setup" "Secure Storage Initialization:\nSets up initial encrypted storage on boot device."
+                ;;
+            3|""|*) break ;;
+        esac
+    done
+}
+
+menu_luks_management() {
+    while true; do
+        CHOICE=$(dialog --title "LUKS Volume Management" --menu "Select an option:" 20 60 6 \
+            1 "Create LUKS volume" \
+            2 "Open LUKS volume" \
+            3 "Close LUKS volume" \
+            4 "Destroy LUKS header" \
+            5 "Help" \
+            6 "Back" \
+            --stdout)
+
+        case "$CHOICE" in
+            1)
+                /sbin/menu/create_luks_volume
+                ;;
+            2)
+                /sbin/menu/open_luks_volume
+                ;;
+            3)
+                /sbin/menu/close_luks_volume
+                ;;
+            4)
+                /sbin/menu/destroy_luks_header
+                ;;
+            5)
+                show_help "LUKS Volume Management" "\
+Create LUKS volume: Initialize LUKS on selected disk.\n\
+Open LUKS volume: Unlock existing LUKS volume.\n\
+Close LUKS volume: Close/unlock.\n\
+Destroy LUKS header: Deletes all keys irreversibly."
+                ;;
+            6|""|*) break ;;
+        esac
+    done
+}
+
+menu_disk_tools() {
+    while true; do
+        CHOICE=$(dialog --title "Disk & Partition Tools" --menu "Select an option:" 15 60 4 \
+            1 "Wipe a whole disk" \
+            2 "Partition/Disk Manager" \
+            3 "Help" \
+            4 "Back" \
+            --stdout)
+
+        case "$CHOICE" in
+            1)
+		/sbin/menu/wipe_disk
+                ;;
+            2)
+                /sbin/menu/open_cfdisk
+                ;;
+            3)
+                show_help "Disk & Partition Tools" "\
+Wipe Disk: Overwrites disk with random data.\n\
+Partition/Disk Manager: Create/delete partitions on selected disk."
+                ;;
+            4|""|*) break ;;
+        esac
+    done
+}
+
+menu_mount_tools() {
+    while true; do
+        CHOICE=$(dialog --title "Mount / Unmount" --menu "Select an option:" 15 60 5 \
+            1 "Mount a LUKS volume" \
+            2 "Unmount a volume" \
+            3 "Format opened volume (ext3/ext4)" \
+	    4 "Clear all mounts" \
+            5 "Help" \
+            6 "Back" \
+            --stdout)
+
+        case "$CHOICE" in
+            1)
+                /sbin/menu/mount_partition
+                ;;
+            2)
+                /sbin/menu/umount_partition
+                ;;
+            3)
+		/sbin/menu/format_open_luks_volume
+                ;;
+	    4)
+	       /sbin/menu/clear_all_storage
+	       ;;
+            5)
+                show_help "Mount / Unmount" "\
+Mount LUKS volume: Open and mount a volume.\n\
+Unmount volume: Close and unmount volume.\n\
+Format volume: Format an opened volume (ext3/ext4).\n
+Clear all mounts: unmounts all non-system mounts and closes all encrypted volumes."
+                ;;
+            6|""|*) break ;;
+        esac
+    done
+}
+
+menu_key_management() {
+    while true; do
+        CHOICE=$(dialog --title "Key Management" --menu "Select an option:" 20 60 6 \
+            1 "List keys on a LUKS volume" \
+            2 "Add a key to a LUKS volume" \
+            3 "Remove a key from a LUKS volume" \
+            4 "Change LUKS password" \
+            5 "Help" \
+            6 "Back" \
+            --stdout)
+
+        case "$CHOICE" in
+            1) 
+		    /sbin/menu/luks_list_keys
+		    ;;
+            2) 
+		    /sbin/menu/luks_add_key
+		    ;;
+            3) 
+		    /sbin/menu/luks_delete_key
+		    ;;
+            4) 
+		    /sbin/menu/change_key
+		    ;;
+            5)
+                show_help "Key Management" "\
+List Keys: Shows all keyslots.\n\
+Add Key: Add a new passphrase or keyfile.\n\
+Remove Key: Delete a key from a volume.\n\
+Change Password: Change existing password."
+                ;;
+            6|""|*) break ;;
+        esac
+    done
+}
+
+menu_repair_status() {
+    while true; do
+        CHOICE=$(dialog --title "Repair / Status" --menu "Select an option:" 15 60 4 \
+            1 "Repair a LUKS volume" \
+            2 "LUKS Status" \
+            3 "Help" \
+            4 "Back" \
+            --stdout)
+
+        case "$CHOICE" in
+            1) 
+		    /sbin/menu/repair_luks_volume
+		    ;;
+            2) 
+		    /sbin/menu/status_luks_volume
+		    ;;
+            3)
+                show_help "Repair / Status" "\
+Repair: Attempt to fix broken LUKS metadata.\n\
+LUKS Status: Shows the status of opened LUKS volumes."
+                ;;
+            4|""|*) break ;;
+        esac
+    done
+}
+
+menu_tools() {
+    while true; do
+        CHOICE=$(dialog --title "Tools" --menu "Select an option:" 10 60 3 \
+            1 "Shell" \
+            2 "Help" \
+            3 "Back" \
+            --stdout)
+
+        case "$CHOICE" in
+            1) run_shell ;;
+            2) show_help "Tools" "Shell: Drop to a BusyBox shell for manual operations." ;;
+            3|""|*) break ;;
+        esac
+    done
+}
+
+#############################
+# Main menu loop
+#############################
+
+while true; do
+    MAIN=$(dialog --title "LUKS TUI Main Menu" --menu "Select a category:" 20 60 9 \
+        1 "Secure Storage Setup" \
+        2 "LUKS Volume Management" \
+        3 "Disk & Partition Tools" \
+        4 "Mount / Unmount" \
+        5 "Key Management" \
+        6 "Repair / Status" \
+        7 "Backup & Restore" \
+        8 "Shell" \
+        9 "Exit" \
+        --stdout)
+
+    case "$MAIN" in
+        1) /sbin/mkluks ;;
+        2) menu_luks_management ;;
+        3) menu_disk_tools ;;
+        4) menu_mount_tools ;;
+        5) menu_key_management ;;
+        6) menu_repair_status ;;
+        7) menu_backup_restore ;;
+        8) run_shell ;;
+        9|""|*) break ;;
+    esac
+
+done
+
+clear
+echo "Exiting LUKS TUI..."
+

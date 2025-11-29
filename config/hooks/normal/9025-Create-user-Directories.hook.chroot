@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+
+# Loop over every directory in /home
+for homedir in /home/*; do
+    [ -d "$homedir" ] || continue  # skip if not a directory
+    for dir in Documents Downloads Music Pictures Videos Encrypted; do
+        mkdir -p "$homedir/$dir"
+        # Preserve ownership of the parent home directory
+        owner=$(stat -c %U "$homedir")
+        group=$(stat -c %G "$homedir")
+        chown "$owner:$group" "$homedir/$dir"
+    done
+done

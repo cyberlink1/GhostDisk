@@ -1,0 +1,63 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+create_luks_volume() {
+
+    #
+    # 1) Select a partition
+    #
+    dev="$(select_partition)" || error_exit "No partition selected."
+
+    #
+    # 2) Check if partition already contains LUKS
+    #
+    if cryptsetup isLuks "$dev" >/dev/null 2>&1; then
+
+        dialog --title "WARNING: LUKS Detected" --yesno \
+            "The selected partition:\n\n  $dev\n\n\
+already contains a LUKS header.\n\
+If you continue, the existing encrypted data and keys WILL BE DESTROYED.\n\
+This action is irreversible.\n\n\
+Do you want to proceed and OVERWRITE the existing LUKS volume?" \
+            18 65 --stdout
+
+        if [ $? -ne 0 ]; then
+            dialog --title "Cancelled" --msgbox \
+                "Operation cancelled. No changes were made." \
+                8 50 --stdout
+            exit 1
+        fi
+    else
+        #
+        # Optionally detect non-LUKS but non-empty filesystem (safer!)
+        #
+        if blkid "$dev" >/dev/null 2>&1; then
+            dialog --title "WARNING: Existing Filesystem" --yesno \
+                "The selected partition:\n\n  $dev\n\n\
+contains an existing filesystem.\n\
+Continuing will ERASE ALL DATA on this partition.\n\n\
+Proceed anyway?" 16 60 --stdout
+
+            if [ $? -ne 0 ]; then
+                dialog --title "Cancelled" --msgbox \
+                    "Operation cancelled. No changes were made." \
+                    8 50 --stdout
+                exit 1
+            fi
+        fi
+    fi
+
+    #
+    # 3) Ask for password twice
+    #
+    pass="$(ask_password_twice)" || error_exit "Password entry cancelled."
+
+    #
+    # 4) Create new LUKS + ext3 as before
+    #
+    create_luks "$dev" "$pass"
+}
+
+create_luks_volume
+

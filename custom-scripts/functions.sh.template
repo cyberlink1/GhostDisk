@@ -1,0 +1,692 @@
+# tmp file register for cleanup
+register_tmpfile() { TMPFILES="$TMPFILES $1"; }
+register_tmpdir()  { TMPDIRS="$TMPDIRS $1"; }
+#
+# Cleanup 
+#
+is_mounted() {
+    # true if $1 is an exact mountpoint in /proc/mounts
+    awk -v m="$1" '$2 == m {exit 0} END {exit 1}' /proc/mounts
+}
+cleanup() {
+    # Remove temp files
+    for f in $TMPFILES; do
+        [ -n "$f" ] && [ -f "$f" ] && rm -f "$f"
+    done
+
+    # Remove temp directories only if not mountpoints
+    for d in $TMPDIRS; do
+        [ -n "$d" ] || continue
+        is_mounted "$d" && continue
+        [ -d "$d" ] && rm -rf "$d"
+    done
+}
+
+# ---- Scan the bus and provide the user a list of partitions ----
+# Returns: selected partition via stdout
+select_partition() {
+    local dialog_choices=""
+    local letter_index=0
+    local letters="a b c d e f g h i j k l m n o p q r s t u v w x y z"
+
+    for dev_path in /sys/block/*; do
+        [ -d "$dev_path" ] || continue
+        local dev_name
+        dev_name=$(basename "$dev_path")
+
+	# Skip virtual/pseudo devices
+        case "$dev_name" in
+            ram*|loop*|dm-*|md*|zram*|rootfs|tmpfs|proc|sys|devtmpfs|fd*)
+                continue
+                ;;
+        esac
+
+        # Skip non-block devices
+        [ -e "$dev_path/size" ] || continue
+
+        # Manufacturer
+        local manufacturer="Unknown"
+        [ -f "$dev_path/device/vendor" ] && manufacturer=$(tr -d ' ' < "$dev_path/device/vendor" 2>/dev/null)
+
+        # Loop partitions
+        for part in "$dev_path"/*; do
+            [ -d "$part" ] || continue
+            local part_name
+            part_name=$(basename "$part")
+            [ "$part_name" = "$dev_name" ] && continue  # skip device itself
+
+            local part_path="/dev/$part_name"
+            local size_bytes
+            size_bytes=$(blockdev --getsize64 "$part_path" 2>/dev/null || echo 0)
+            local size_mb=$((size_bytes / 1024 / 1024))
+            [ "$size_mb" -eq 0 ] && continue  # skip zero-size
+
+            # Letter prefix
+            local letter
+            letter=$(echo $letters | cut -d' ' -f$((letter_index + 1)))
+            letter_index=$((letter_index + 1))
+
+            # Append to dialog choices: tag=actual path, desc="letter) name (manufacturer, size)"
+            dialog_choices="$dialog_choices \"$part_path\" \"$letter) $part_name ($manufacturer, ${size_mb}MiB)\""
+        done
+    done
+
+    [ -z "$dialog_choices" ] && echo "No partitions found." && return 1
+
+    # Use /dev/tty0 for dialog input/output in initramfs
+    local selected
+    eval "selected=\$(dialog --clear --title 'Select Partition' \
+        --menu 'Choose the correct partition:' 20 60 10 $dialog_choices --stdout)"
+
+    [ -z "$selected" ] && echo "No partition selected." && return 1
+
+    # Return selected partition via stdout
+    echo "$selected"
+
+}
+# Returns a list of mounted partitions: device mountpoint
+# Returns a list of mounted partitions: device mountpoint
+# Filters out tmpfs, rootfs, proc, sys, devtmpfs, ram*, loop*, dm-*, etc.
+# Example output:
+# /dev/sda1 /boot
+# /dev/sdb1 /mnt/data
+mounted_partitions() {
+    local mounts
+    mounts=$(awk '{print $1 " " $2 " " $3}' /proc/mounts)
+
+    if [ -z "$mounts" ]; then
+        return 1
+    fi
+
+    local line
+    local old_ifs=$IFS
+    IFS='
+'
+    for line in $mounts; do
+        IFS=$old_ifs
+        local dev mp fstype
+        dev=$(echo "$line" | cut -d' ' -f1)
+        mp=$(echo "$line" | cut -d' ' -f2)
+        fstype=$(echo "$line" | cut -d' ' -f3)
+
+        # Skip pseudo/virtual filesystems
+        case "$dev $fstype" in
+            tmpfs*|rootfs*|proc*|sys*|devtmpfs*|ram*|loop*|dm-*)
+                continue
+                ;;
+        esac
+
+        # Only include real block devices
+        echo "$dev $mp"
+        IFS='
+'
+    done
+    IFS=$old_ifs
+    return 0
+}
+
+# ---- Scan the bus for the block device containing the iso ----
+scan_for_device() {
+    # UUID to be inserted by make_image.sh
+    TARGET_UUID="@@UUID@@"
+
+    local iso_dev=""
+    local data_dev=""
+
+    # Scan block devices
+    for usb_dev in /sys/block/*; do
+        [ -d "$usb_dev" ] || continue
+        local dev_name
+        dev_name=$(basename "$usb_dev")
+
+        # Expect two partitions: dev1 = ISO, dev2 = data
+        local part1="/dev/${dev_name}1"
+        local part2="/dev/${dev_name}2"
+
+        # Both partitions must exist
+        [ -e "$part1" ] || continue
+        [ -e "$part2" ] || continue
+
+        # Read UUID of partition 2
+        local uuid
+        uuid=$(/usr/sbin/sgdisk -i 2 "/dev/${dev_name}" | awk -F': ' '/Partition unique GUID/ {print $2}' | tr -d '[:space:]')
+
+        # Compare to target UUID
+        if [ "$uuid" = "$TARGET_UUID" ]; then
+            iso_dev="$part1"
+            data_dev="$part2"
+            break
+        fi
+    done
+
+    [ -n "$iso_dev" ] && [ -n "$data_dev" ] || return 1
+
+    printf '%s\n' "$iso_dev"
+    printf '%s\n' "$data_dev"
+}
+
+# ---- Report Error and exit ----
+error_exit() {
+    dialog --title "Error" --msgbox "$1" 10 50 --stdout
+    reboot
+    exit 1
+}
+
+# ---- Check if LUKS exists ----
+# Usage: check_luks <partition>
+# Returns: 0 = no LUKS, 1 = LUKS exists
+check_luks() {
+    local dev="$1"
+    if cryptsetup isLuks "$dev" 2>/dev/null; then
+        dialog --title "Notice" --msgbox "Extended-data is already a LUKS device.\nPress OK to exit" 10 50 --stdout
+        return 1
+    fi
+    return 0
+}
+
+# ---- Prompt for password twice ----
+# Usage: get_password
+# Returns: password via stdout
+get_password() {
+    dialog --title "Notice" --msgbox \
+        "We are going to set up your encrypted storage\nYou will be asked to enter your password twice\nThen it will detect your storage and configure it" \
+        10 50 --stdout
+
+    while :; do
+        # First entry
+        dialog --clear --title "LUKS Password" \
+            --passwordbox "Enter a password for the new LUKS filesystem:" 10 50 --stdout >/tmp/luks_pass1
+        ret=$?
+        [ $ret -ne 0 ] && { echo "User canceled password entry"; reboot -f; }
+        local pass1
+        pass1=$(tr -d '\n' < /tmp/luks_pass1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        rm -f /tmp/luks_pass1
+
+        # Second entry
+        dialog --clear --title "LUKS Password" \
+            --passwordbox "Re-enter the password for confirmation:" 10 50 --stdout >/tmp/luks_pass2
+        ret=$?
+        [ $ret -ne 0 ] && { echo "User canceled password entry"; reboot -f; }
+        local pass2
+        pass2=$(tr -d '\n' < /tmp/luks_pass2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        rm -f /tmp/luks_pass2
+
+        if [ "$pass1" = "$pass2" ]; then
+            echo "$pass1"
+            return 0
+        else
+            dialog --title "Mismatch" --msgbox "Passwords do not match. Please try again." 6 50 --stdout
+        fi
+    done
+}
+
+# ---- Create LUKS + ext3 ----
+# Usage: create_luks <partition> <password>
+create_luks() {
+    local dev="$1"
+    local pass="$2"
+    dialog --title "Creating encrypted filesystem" --infobox "Working..." 10 50
+    echo -n "$pass" | cryptsetup luksFormat "$dev" - 2> /dev/null
+    dialog --title "Opening encrypted filesystem" --infobox "Working..." 10 50
+    echo -n "$pass" | cryptsetup open "$dev" tmpcrypt -
+    sleep 2
+
+    dialog --title "Preparing to format filesystem" --infobox "Done" 10 50 
+
+    # Run mkfs.ext3 and pipe output to gauge
+    mkfs.ext3 -v /dev/mapper/tmpcrypt 2>&1 | while read -r line; do
+        case "$line" in
+            *"Allocating group tables"*)
+                echo "5"; echo "# Allocating group tables";;
+            *"Writing inode tables"*)
+                echo "25"; echo "# Writing inode tables";;
+            *"Creating journal"*)
+                echo "90"; echo "# Creating journal";;
+            *"Writing superblocks"*)
+                echo "99"; echo "# Writing superblocks and accounting";;
+        esac
+    done | dialog --gauge "Creating ext3 filesystem..." 10 50 0 --stdout
+    mkdir -p /mnt/tmpcrypt
+
+    mount /dev/mapper/tmpcrypt /mnt/tmpcrypt
+    
+    cp /etc/.cl.cfg /mnt/tmpcrypt
+    chown 1000:1000 /mnt/tmpcrypt/.cl.cfg
+    chown 1000:1000 /mnt/tmpcrypt
+    echo 100 | dialog --title "Formatting Complete" --gauge "Done" 10 50 0 --stdout
+    dialog --title "Success" --msgbox "LUKS filesystem created on extended-data.\nPress OK to exit" 10 50 --stdout
+    umount "/mnt/tmpcrypt"
+    cryptsetup close "tmpcrypt"
+    rm -r "/mnt/tmpcrypt"
+}
+open_luks() {
+    local dev="$1"
+    local mapper_name="${2:-cryptdata}"  # default only if no mapper provided
+    local ask_dev="${3:-$1}"
+
+    # Ask for password
+    local pass
+    pass=$(ask_password_once "Enter password to unlock $ask_dev:")
+
+    dialog --title "Opening LUKS" --infobox "Working..." 10 50
+
+    echo -n "$pass" | cryptsetup open "$dev" "$mapper_name" - || {
+        dialog --title "Error" --msgbox "Failed to open LUKS device." 10 50 --stdout
+        return 1
+    }
+
+    dialog --title "Opened" --msgbox "Encrypted filesystem unlocked successfully." 8 50 --stdout
+    return 0
+}
+
+close_luks() {
+    local name="${1:-cryptdata}"
+
+    dialog --title "Closing LUKS" --infobox "Working..." 10 50
+    sleep 1
+
+    if cryptsetup close "$name"; then
+        dialog --title "Closed" --msgbox "Encrypted filesystem closed." 8 50 --stdout
+        return 0
+    else
+        dialog --title "Error" --msgbox "Failed to close LUKS mapping." 8 50 --stdout
+        return 1
+    fi
+}
+status_luks() {
+    local dev="$1"
+    local mapper status_output
+
+    if [ -n "$dev" ]; then
+        # Detect open mapper
+        mapper="$dev"  # or whatever you determine the mapper is
+
+        # Collect status output
+        status_output=$(cryptsetup status "$dev" 2>/dev/null)
+
+        # Use a here-doc to feed dialog directly
+        dialog --title "LUKS Status" --msgbox "$(cat <<EOF
+ - LUKS device is OPEN
+ - Mapper name: $mapper
+
+$(echo "$status_output" | sed 's/^/ - /')
+EOF
+)" 20 70 --stdout
+    else
+        dialog --title "LUKS Status" --msgbox " - LUKS device is CLOSED" 12 50 --stdout
+    fi
+
+    return 0
+}
+
+repair_luks() {
+    local dev="$1"
+
+    dialog --title "LUKS Repair" --yesno \
+        "Attempt repair of LUKS metadata for:\n\n  $dev\n\nThis operation modifies the header.\nProceed?" \
+        12 60 --stdout
+    [ $? -ne 0 ] && return 1
+
+    dialog --title "Repairing" --infobox "Running luksRepair..." 10 50
+
+    sleep 1
+
+    if cryptsetup repair "$dev" >/tmp/luks_repair 2>&1; then
+        dialog --title "Repaired" --msgbox \
+            "Repair completed successfully.\n\n$(cat /tmp/luks_repair)" \
+            15 60 --stdout
+        rm -f /tmp/luks_repair
+        return 0
+    else
+        dialog --title "Repair Failed" --msgbox \
+            "Repair failed.\n\nDetails:\n$(cat /tmp/luks_repair)" \
+            15 60 --stdout
+        rm -f /tmp/luks_repair
+        return 1
+    fi
+}
+
+erase_luks() {
+    local dev="$1"
+
+    dialog --title "Warning" --yesno \
+        "This will ERASE ALL LUKS KEYS on:\n\n  $dev\n\n\
+This action makes ALL DATA PERMANENTLY INACCESSIBLE.\n\
+Your filesystem and data will remain on disk but will be cryptographically destroyed.\n\n\
+Continue?" \
+        15 60 --stdout
+    [ $? -ne 0 ] && return 1
+
+    dialog --title "Erasing LUKS Keys" --infobox "Working..." 10 50
+    sleep 1
+
+    # Perform secure erase of all keyslots
+    if printf 'YES\n' | cryptsetup luksErase "$dev" >/tmp/luks_erase 2>&1; then
+        dialog --title "Erase Complete" --msgbox \
+            "All LUKS keyslots have been erased.\n\
+The encrypted data is now permanently inaccessible.\n\n\
+cryptsetup output:\n$(cat /tmp/luks_erase)" \
+            15 60 --stdout
+        rm -f /tmp/luks_erase
+        return 0
+    else
+        dialog --title "Erase Failed" --msgbox \
+            "LUKS key erase FAILED.\n\n\
+cryptsetup output:\n$(cat /tmp/luks_erase)" \
+            15 60 --stdout
+        rm -f /tmp/luks_erase
+        return 1
+    fi
+}
+
+ask_password_once() {
+    local prompt="${1:-Enter password:}"
+
+    local pass
+    pass=$(dialog --clear --title "LUKS Password" \
+                  --passwordbox "$prompt" 10 50 --stdout)
+
+    [ $? -ne 0 ] && return 1  # user canceled
+
+    # Trim whitespace + newlines
+    pass=$(printf "%s" "$pass" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+    echo "$pass"
+    return 0
+}
+
+ask_password_twice() {
+    while :; do
+        local p1 p2
+
+        p1=$(dialog --clear --title "LUKS Password" \
+            --passwordbox "Enter a password for the encrypted filesystem:" 10 50 --stdout)
+        [ $? -ne 0 ] && return 1
+
+        p2=$(dialog --clear --title "LUKS Password" \
+            --passwordbox "Re-enter password to confirm:" 10 50 --stdout)
+        [ $? -ne 0 ] && return 1
+
+        # Normalize (trim whitespace/newlines)
+        p1=$(printf "%s" "$p1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        p2=$(printf "%s" "$p2" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+        if [ "$p1" = "$p2" ]; then
+            echo "$p1"
+            return 0
+        fi
+
+        dialog --title "Mismatch" --msgbox \
+            "Passwords do not match. Please try again." 8 50 --stdout
+    done
+}
+
+list_luks_partition() {
+    letters="a b c d e f g h i j k l m n o p q r s t u v w x y z"
+    letter_index=1
+
+    # Read blkid output
+    luks_lines=$(blkid 2>/dev/null | grep -i luks) || luks_lines=""
+    if [ -z "$luks_lines" ]; then
+        return 1
+    fi
+
+    # Prepare positional parameters for dialog
+    set --
+
+    # Walk each line without a pipe (important!)
+    old_ifs=$IFS
+    IFS='
+'
+    for line in $luks_lines; do
+        IFS=$old_ifs
+        [ -z "$line" ] && continue
+        device=$(printf '%s' "$line" | cut -d: -f1)
+        uuid=$(printf '%s' "$line" | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')
+
+        letter=$(echo $letters | cut -d' ' -f "$letter_index")
+        letter_index=$((letter_index + 1))
+
+        set -- "$@" "$letter" "$device - $uuid"
+        IFS='
+'
+    done
+    IFS=$old_ifs
+
+    if [ $# -eq 0 ]; then
+        return 1
+    fi
+
+    selection=$(dialog --clear \
+        --title "Select LUKS Partition" \
+        --menu "Choose a LUKS volume:" \
+        20 70 10 \
+        "$@" \
+        --stdout)
+
+    if [ $? -ne 0 ] || [ -z "$selection" ]; then
+        echo "No selection made"
+        return 1
+    fi
+
+    # Resolve selected letter
+    letter_index=1
+    IFS='
+'
+    for line in $luks_lines; do
+        IFS=$old_ifs
+        device=$(printf '%s' "$line" | cut -d: -f1)
+        uuid=$(printf '%s' "$line" | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')
+
+        letter=$(echo $letters | cut -d' ' -f "$letter_index")
+
+        if [ "$selection" = "$letter" ]; then
+            printf '%s %s\n' "$device" "$uuid"
+            return 0
+        fi
+
+        letter_index=$((letter_index + 1))
+        IFS='
+'
+    done
+    IFS=$old_ifs
+
+    echo "Selection not found"
+    return 1
+}
+
+list_open_luks() {
+    local letters="a b c d e f g h i j k l m n o p q r s t u v w x y z"
+    local letter_index=1
+    local mapper backing
+    local open_list lines old_ifs selection
+
+    # 1) Get list of open LUKS mappings
+    if dmsetup ls --target crypt >/dev/null 2>&1; then
+        lines=$(dmsetup ls --target crypt 2>/dev/null | sed 's/:$//' | grep -v '^No devices found$')
+    else
+        # fallback: list /dev/mapper excluding 'control'
+        lines=""
+        for m in /dev/mapper/*; do
+            [ -e "$m" ] || continue
+            name=$(basename "$m")
+            [ "$name" = "control" ] && continue
+            lines="$lines
+$name"
+        done
+    fi
+
+    # Remove leading empty line if any
+    lines=$(echo "$lines" | sed '/^$/d')
+
+    [ -z "$lines" ] && return 1
+
+    # 2) Build dialog positional arguments
+    set --
+    old_ifs=$IFS
+    IFS='
+'
+    for mapper in $lines; do
+        IFS=$old_ifs
+        [ -z "$mapper" ] && continue
+        backing=$(dmsetup info -c --noheadings -o dev_name "$mapper" 2>/dev/null)
+        [ -z "$backing" ] && backing="(unknown device)"
+
+        letter=$(echo $letters | cut -d' ' -f "$letter_index")
+        letter_index=$((letter_index + 1))
+
+        set -- "$@" "$letter" "$mapper - $backing"
+        IFS='
+'
+    done
+    IFS=$old_ifs
+
+    # 3) Ask user which mapping to select
+    selection=$(dialog --clear \
+        --title "Open LUKS Mapping" \
+        --menu "Choose an open LUKS volume:" \
+        20 70 10 \
+        "$@" \
+        --stdout)
+
+    [ $? -ne 0 ] && return 1
+    [ -z "$selection" ] && return 1
+
+    # 4) Find the selected mapping
+    letter_index=1
+    IFS='
+'
+    for mapper in $lines; do
+        IFS=$old_ifs
+        [ -z "$mapper" ] && continue
+        backing=$(dmsetup info -c --noheadings -o dev_name "$mapper" 2>/dev/null)
+        [ -z "$backing" ] && backing="(unknown device)"
+
+        letter=$(echo $letters | cut -d' ' -f "$letter_index")
+        if [ "$letter" = "$selection" ]; then
+            echo "$mapper $backing"
+            return 0
+        fi
+        letter_index=$((letter_index + 1))
+        IFS='
+'
+    done
+    IFS=$old_ifs
+
+    return 1
+}
+
+# Usage: is_luks_open_rw <partition>
+# Returns:
+#   1 = LUKS device is open (read/write)
+#   0 = Not LUKS, closed, or suspended
+is_luks_open() {
+    local dev="$1"
+    local mapper=""
+    local mode=""
+
+    # Step 1: Check if LUKS
+    if ! cryptsetup isLuks "$dev" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Step 2: Find open mapper
+    local path m mapped_dev
+    for path in /dev/mapper/*; do
+        [ -e "$path" ] || continue
+        m=$(basename "$path")
+        mapped_dev=$(cryptsetup status "$m" 2>/dev/null | awk '/device:/ {print $2}')
+        if [ "$mapped_dev" = "$dev" ]; then
+            mapper="$m"
+            break
+        fi
+    done
+
+    # Step 3: Not open if no mapper found
+    [ -z "$mapper" ] && return 0
+
+    # Step 4: Check mode via cryptsetup status
+    mode=$(cryptsetup status "$mapper" 2>/dev/null | awk -F': ' '/mode:/ {print $2}')
+
+    # Only consider open if mode is exactly "read/write"
+    if [ "$mode" = "read/write" ]; then
+        return 1  # LUKS open
+    else
+        return 0  # closed, read-only, or suspended
+    fi
+}
+# --- Resize data_dev partition to full size of disk using growpart ---
+#
+resize_partition_full() {
+    local part_dev="$1"
+    local disk_dev part_num
+
+    # Extract disk and partition number
+    disk_dev="$(echo "$part_dev" | sed -E 's|(p?[0-9]+)$||')"
+    part_num="$(echo "$part_dev" | sed -E 's|^.*p?([0-9]+)$|\1|')"
+
+    dialog --title "Resizing Partition" --infobox "Expanding $part_dev to fill disk..." 7 60
+    sleep 1
+
+    # Use growpart to expand partition to the end of the disk
+    if command -v growpart >/dev/null 2>&1; then
+        growpart "$disk_dev" "$part_num" >/dev/null 2>&1
+    else
+        dialog --title "Error" --msgbox "growpart not found!" 6 50
+        return 1
+    fi
+
+    # Reload partition table
+    if command -v partprobe >/dev/null 2>&1; then
+        partprobe "$disk_dev" >/dev/null 2>&1
+    else
+        blockdev --rereadpt "$disk_dev" 2>/dev/null
+    fi
+
+    dialog --title "Resizing Partition" --infobox "Resize complete." 6 60
+    sleep 1
+}
+
+# Take over persistent storage if already open/mounted
+#
+clear_storage() {
+    local CLEAR_DEV="$1"
+    local mapper=""
+    local m mapped_dev mp
+
+    # If not open, nothing to do
+    is_luks_open "$CLEAR_DEV" || return 0
+
+    # Find mapper name
+    for m in /dev/mapper/*; do
+        [ -e "$m" ] || continue
+        mapped_dev=$(cryptsetup status "$(basename "$m")" 2>/dev/null | awk '/device:/ {print $2}')
+        if [ "$mapped_dev" = "$CLEAR_DEV" ]; then
+            mapper=$(basename "$m")
+            break
+        fi
+    done
+
+    # If we somehow didn't find the mapper, bail
+    [ -z "$mapper" ] && return 0
+
+    # Unmount and cleanup any mountpoints for this mapper
+    for mp in $(mounted_partitions | awk '{print $2}'); do
+        awk -v dev="/dev/mapper/$mapper" '$1==dev{found=1} END{exit !found}' /proc/mounts || continue
+        
+        # Unmount
+        umount "$mp" 2>/dev/null || umount -l "$mp" 2>/dev/null
+
+        # If directory is under /mnt/* and not /mnt itself, remove it
+        case "$mp" in
+            /mnt/*)
+                # Avoid deleting /mnt itself
+                [ "$mp" != "/mnt" ] && rmdir "$mp" 2>/dev/null
+                ;;
+        esac
+    done
+
+    # Close the mapper
+    cryptsetup close "$mapper" 2>/dev/null
+}
+

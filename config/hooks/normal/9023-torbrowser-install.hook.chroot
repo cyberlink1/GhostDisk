@@ -1,0 +1,36 @@
+#!/bin/bash
+set -e
+
+# Variables
+TOR_VERSION="15.0a4"   # Example, can check latest
+TOR_URL="https://www.torproject.org/dist/torbrowser/${TOR_VERSION}/tor-browser-linux-x86_64-${TOR_VERSION}.tar.xz"
+DEST="/opt/tor-browser"
+
+# Create destination
+mkdir -p "$DEST"
+
+# Download and extract
+wget -O /tmp/tor-browser.tar.xz "$TOR_URL"
+tar -xJf /tmp/tor-browser.tar.xz -C /opt
+#mv /opt/tor-browser/* "$DEST/"
+rm -rf /tmp/tor-browser.tar.xz
+chown -R 1000:1000 "$DEST"
+
+#set permissions
+#find ${DEST} -type d -exec chmod 755 {} \;
+#find ${DEST} -type f -exec chmod 644 {} \;
+
+# Make launcher executable
+#chmod +x "$DEST/Browser/start-tor-browser"
+#chmod +x "$DEST/Browser/start-tor-browser.desktop"
+#chmod +x "$DEST/Browser/execdesktop"
+#chmod +x "$DEST/Browser/firefox"
+#chmod +x "$DEST/Browser/firefox.real"
+#chmod +x "$DEST/Browser/glxtest"
+#chmod +x "$DEST/Browser/abicheck"
+#chmod +x "$DEST/Browser/updater"
+#chmod +x "$DEST/Browser/vaapitest"
+#chmod +x "$DEST/Browser/TorBrowser/Tor/tor"
+#chmod +x "$DEST/Browser/TorBrowser/Tor/PluggableTransports/*"
+
+

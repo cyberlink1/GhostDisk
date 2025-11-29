@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=udiskie
+Comment=Automount removable and encrypted volumes
+Exec=udiskie --tray
+OnlyShowIn=XFCE;LXQT
+X-GNOME-Autostart-enabled=true
+

@@ -1,0 +1,67 @@
+#!/bin/sh
+# initialize_backup_volume
+
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+# -------------------------------------------------------
+# Get persistent storage block device using scan_for_device
+# -------------------------------------------------------
+ps_dev=$(scan_for_device | sed -n 2p)
+[ -z "$ps_dev" ] && error_exit "Could not locate persistent storage device"
+
+clear_storage "$ps_dev"
+
+# -------------------------------------------------------
+# Unlock persistent storage
+# -------------------------------------------------------
+# LUKS mapper is always named cryptdata by open_luks()
+ps_mapper="crypt-$(basename "$ps_dev")" 
+
+open_luks "$ps_dev" "$ps_mapper" "persistent storage" || error_exit "Failed to unlock persistent storage"
+
+
+# -------------------------------------------------------
+# Mount persistent storage read/write
+# -------------------------------------------------------
+ps_mp=$(mktemp -d -p /mnt)
+[ -z "$ps_mp" ] && error_exit "mktemp failed"
+register_tmpdir "$ps_mp"
+
+mount "/dev/mapper/$ps_mapper" "$ps_mp" || error_exit "Failed to mount persistent storage"
+
+# -------------------------------------------------------
+# Select backup target using existing LUKS picker
+# -------------------------------------------------------
+sel=$(list_luks_partition)
+[ -z "$sel" ] && error_exit "No LUKS partitions found"
+
+backup_dev=$(echo "$sel" | awk '{print $1}')
+backup_uuid=$(echo "$sel" | awk '{print $2}')
+
+# Prevent selecting persistent storage itself
+if [ "$backup_dev" = "$ps_dev" ]; then
+    umount "$ps_mp"
+    cryptsetup close cryptdata
+    error_exit "Backup device cannot be the persistent storage!"
+fi
+
+# -------------------------------------------------------
+# Save backup target UUID to persistent storage
+# -------------------------------------------------------
+echo "$backup_uuid" > "$ps_mp/.backup" || {
+    umount "$ps_mp"
+    cryptsetup close "$ps_mapper"
+    error_exit "Failed to save .backup file"
+}
+
+# -------------------------------------------------------
+# Cleanup
+# -------------------------------------------------------
+umount "$ps_mp"
+cryptsetup close "$ps_mapper"
+
+
+dialog --title "Backup Target Registered" \
+       --msgbox "Backup volume has been registered successfully." 8 50
+

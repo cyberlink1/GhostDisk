@@ -1,0 +1,13 @@
+[Unit]
+Description=Detect LUKS partition and add to fstab
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/luks-detect.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=graphical.target
+

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Tor Browser (Tor Network)
+Comment=Browse anonymously over the Tor network
+Exec=/opt/tor-browser/Browser/start-tor-browser --detach
+Icon=torbrowser
+Type=Application
+Categories=Network;WebBrowser;Security;
+StartupNotify=true
+

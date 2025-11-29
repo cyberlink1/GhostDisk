@@ -1,0 +1,33 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+wipe_disk() {
+    # 1) Select device/partition
+    dev="$(select_partition)" || error_exit "No device selected."
+
+    # 2) Confirm destructive action
+    dialog --yesno \
+        "WARNING: This will ERASE ALL DATA on:\n\n  $dev\n\nContinue?" \
+        12 60 --stdout
+    [ $? -ne 0 ] && return 1
+
+    # 3) Wipe device with dd
+    dialog --title "Wiping" --infobox "Wiping $dev..." 6 50
+    sleep 1
+
+    block_size=4M
+    total_size=$(blockdev --getsize64 "$dev")
+    total_mb=$((total_size / 1024 / 1024))
+
+    dd if=/dev/random of="$dev" bs=$block_size status=progress 2>&1 | \
+    dialog --title "Wiping $dev" --gauge "Writing zeros..." 10 60 0 --stdout
+
+    sync
+
+    dialog --title "Done" --msgbox \
+        "$dev has been wiped." 8 40 --stdout
+}
+
+wipe_disk
+

@@ -1,0 +1,48 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+close_luks_volume() {
+    local entry mapname mp
+
+    # 1) Select an open LUKS mapping
+    entry="$(list_open_luks)" || error_exit "No open LUKS mappings found."
+    mapname="$(echo "$entry" | awk '{print $1}')"
+
+    # 2) Check if it is mounted
+    mp=""
+    old_ifs=$IFS
+    IFS='
+'
+    for line in $(mounted_partitions); do
+        IFS=$old_ifs
+        local dev mnt
+        dev=$(echo "$line" | cut -d' ' -f1)
+        mnt=$(echo "$line" | cut -d' ' -f2)
+        if [ "$dev" = "/dev/mapper/$mapname" ]; then
+            mp="$mnt"
+            break
+        fi
+        IFS='
+'
+    done
+    IFS=$old_ifs
+
+    # 3) Unmount if mounted
+    if [ -n "$mp" ]; then
+        dialog --title "Unmounting" --infobox "Unmounting $mp..." 8 50
+        umount "$mp" || error_exit "Failed to unmount $mp"
+    fi
+
+    # 4) Close the LUKS mapping
+    dialog --title "Closing" --infobox "Closing LUKS mapping $mapname..." 8 50
+    sleep 1
+    cryptsetup close "$mapname" || error_exit "Failed to close $mapname"
+
+    dialog --title "Closed" --msgbox \
+        "LUKS mapping closed successfully:\n\n$mapname" \
+        8 50 --stdout
+}
+
+close_luks_volume
+

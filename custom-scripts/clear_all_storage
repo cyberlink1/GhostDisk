@@ -1,0 +1,62 @@
+#!/bin/sh
+# Clear all LUKS mappings, unmount all non-system mounts, clean /mnt
+
+. /lib/functions.sh
+
+clear_all_storage() {
+    dialog --title "Clear All Storage" --yesno \
+        "This will:\n
+ - Unmount all real block-device mounts\n\
+ - Close ALL open LUKS mappings\n\
+ - Remove leftover directories under /mnt\n\
+\nContinue?" \
+        15 60 --stdout
+
+    [ $? -ne 0 ] && return 0
+
+    dialog --title "Clearing Storage" --infobox "Working..." 6 40
+
+    # -----------------------------------------
+    # 1) Unmount all real block-device mounts
+    # -----------------------------------------
+    mounted_partitions | while read -r dev mp; do
+        [ -n "$dev" ] && [ -n "$mp" ] || continue
+
+        # protect system mounts that must remain available in initramfs
+        case "$mp" in
+            /|/run|/proc|/sys|/dev) continue ;;
+        esac
+
+        umount "$mp" 2>/dev/null
+    done
+
+    # -----------------------------------------------------
+    # 2) Close ALL open LUKS mappings detected by dmsetup
+    # -----------------------------------------------------
+    if dmsetup ls >/dev/null 2>&1; then
+        dmsetup ls --target crypt 2>/dev/null | sed 's/:.*//' | while read -r mapper; do
+            [ -n "$mapper" ] || continue
+            cryptsetup close "$mapper" 2>/dev/null
+        done
+    fi
+
+    # -----------------------------------------------------
+    # 3) Clean out /mnt (only empty dirs or safe dirs)
+    # -----------------------------------------------------
+    for d in /mnt/*; do
+        [ -d "$d" ] || continue
+
+        # If it is still a mountpoint, skip it
+        if is_mounted "$d"; then
+            continue
+        fi
+
+        rm -rf "$d"
+    done
+
+    sleep 1
+    dialog --title "Clear All Storage" --msgbox "All LUKS mappings closed.\nAll non-system mounts unmounted.\n/mnt cleaned." 10 50
+}
+
+clear_all_storage
+

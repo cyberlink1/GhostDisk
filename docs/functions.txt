@@ -1,0 +1,204 @@
+================================================================================
+functions.sh – LUKS & Partition Management Functions
+================================================================================
+Purpose:
+    Provides interactive, dialog-based functions for scanning, selecting,
+    creating, opening, closing, and managing LUKS-encrypted partitions.
+    Designed for live-build environments.
+
+Dependencies:
+    bash, dialog, cryptsetup, blkid, blockdev, dmsetup
+
+================================================================================
+Partition Functions
+================================================================================
+
+select_partition()
+    Usage:
+        select_partition
+    Arguments:
+        None
+    Returns:
+        Selected partition path via stdout
+    Description:
+        Scans /sys/block for partitions, skipping zero-size partitions
+        and the device itself. Presents an interactive menu via dialog.
+
+scan_for_device()
+    Usage:
+        scan_for_device
+    Arguments:
+        None
+    Returns:
+        Two lines via stdout:
+            1) ISO partition path
+            2) Data partition path
+    Description:
+        Scans block devices to locate ISO (~3072 MB) and associated data
+        partition. Returns nothing if not found.
+
+================================================================================
+Error Handling
+================================================================================
+
+error_exit()
+    Usage:
+        error_exit "<message>"
+    Arguments:
+        message - string describing the error
+    Returns:
+        None
+    Description:
+        Displays an error dialog, reboots the system, and exits the script.
+
+================================================================================
+LUKS Checks & Password Management
+================================================================================
+
+check_luks()
+    Usage:
+        check_luks <partition>
+    Arguments:
+        partition - path to the device/partition
+    Returns:
+        1 if LUKS exists, 0 if not
+    Description:
+        Checks if the partition is already LUKS formatted. Shows a notice dialog
+        if it is.
+
+get_password()
+    Usage:
+        get_password
+    Arguments:
+        None
+    Returns:
+        Password via stdout
+    Description:
+        Prompts the user twice for a new password using dialog. Ensures both
+        entries match and trims whitespace/newlines.
+
+ask_password_once()
+    Usage:
+        ask_password_once "<prompt>"
+    Arguments:
+        prompt - optional prompt string
+    Returns:
+        Password via stdout
+    Description:
+        Prompts the user once for a password. Returns 1 if the user cancels.
+
+ask_password_twice()
+    Usage:
+        ask_password_twice
+    Arguments:
+        None
+    Returns:
+        Password via stdout
+    Description:
+        Prompts the user twice until passwords match. Returns 1 if the user cancels.
+
+================================================================================
+LUKS Creation & Management
+================================================================================
+
+create_luks()
+    Usage:
+        create_luks <partition> <password>
+    Arguments:
+        partition - device path
+        password  - password for LUKS
+    Returns:
+        None
+    Description:
+        Creates a new LUKS container on the partition, opens it as 'cryptdata',
+        and formats it as ext3. Displays progress with dialog gauges.
+
+open_luks()
+    Usage:
+        open_luks <partition>
+    Arguments:
+        partition - device path
+    Returns:
+        0 on success, 1 on failure
+    Description:
+        Prompts for password and opens the LUKS container as 'cryptdata'.
+        Shows dialog status and errors.
+
+close_luks()
+    Usage:
+        close_luks [mapping_name]
+    Arguments:
+        mapping_name - optional, default is 'cryptdata'
+    Returns:
+        0 on success, 1 on failure
+    Description:
+        Closes the specified LUKS mapping.
+
+status_luks()
+    Usage:
+        status_luks <partition>
+    Arguments:
+        partition - device path
+    Returns:
+        0 if LUKS exists and mapping is open/closed, 1 otherwise
+    Description:
+        Displays LUKS formatting status and whether the mapping is open or closed.
+
+repair_luks()
+    Usage:
+        repair_luks <partition>
+    Arguments:
+        partition - device path
+    Returns:
+        0 on success, 1 on failure
+    Description:
+        Runs `cryptsetup luksRepair` after user confirmation. Displays results
+        in dialog.
+
+erase_luks()
+    Usage:
+        erase_luks <partition>
+    Arguments:
+        partition - device path
+    Returns:
+        0 on success, 1 on failure
+    Description:
+        Securely erases all LUKS keyslots. Underlying data remains but is
+        permanently inaccessible.
+
+================================================================================
+LUKS Partition Listing
+================================================================================
+
+list_luks_partition()
+    Usage:
+        list_luks_partition
+    Arguments:
+        None
+    Returns:
+        Selected partition path and UUID via stdout
+    Description:
+        Lists all LUKS partitions using blkid. Presents an interactive dialog
+        menu for selection.
+
+list_open_luks()
+    Usage:
+        list_open_luks
+    Arguments:
+        None
+    Returns:
+        Selected mapping name and backing device via stdout
+    Description:
+        Lists currently open LUKS mappings via dmsetup or /dev/mapper.
+        Interactive dialog menu for selection.
+
+================================================================================
+Notes / Tips
+================================================================================
+- Temporary files in /tmp include the PID ($$) to avoid collisions.
+- Dialog menus use letters a-z for selection.
+- Designed for initramfs environments; scripts may reboot on critical failures.
+- Default LUKS mapping name is 'cryptdata'; can be customized.
+- Fully compatible with interactive dialog workflows and live images.
+================================================================================
+

@@ -1,0 +1,130 @@
+#!/bin/sh
+# restore_individual_files
+
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+# -------------------------------------------------------
+# 1. Open & mount persistent storage
+# -------------------------------------------------------
+
+persist_mount=$(mktemp -d -p /mnt)
+register_tmpdir "$persist_mount"
+
+ps_dev=$(scan_for_device | sed -n 2p)
+[ -z "$ps_dev" ] && error_exit "Could not locate persistent storage device"
+
+clear_storage "$ps_dev"
+
+ps_mapper="crypt-$(basename "$ps_dev")"
+
+open_luks "$ps_dev" "$ps_mapper" "persistent storage" \
+    || error_exit "Failed to unlock persistent storage"
+
+mount "/dev/mapper/$ps_mapper" "$persist_mount" \
+    || error_exit "Failed to mount persistent storage"
+
+# -------------------------------------------------------
+# 2. Read backup device UUID from .backup
+# -------------------------------------------------------
+
+backup_uuid=$(cat "$persist_mount/.backup" 2>/dev/null)
+[ -z "$backup_uuid" ] && error_exit "No backup target configured"
+
+
+# -------------------------------------------------------
+# 3. Open & mount backup device
+# -------------------------------------------------------
+
+backup_dev=$(blkid | grep "$backup_uuid" | cut -d: -f1)
+[ -z "$backup_dev" ] && error_exit "Backup device not found"
+
+clear_storage "$backup_dev"
+
+backup_mapper="crypt-$(basename "$backup_dev")"
+
+open_luks "$backup_dev" "$backup_mapper" "backup storage" \
+    || error_exit "Failed to unlock backup storage"
+
+backup_mount=$(mktemp -d -p /mnt)
+register_tmpdir "$backup_mount"
+
+mount "/dev/mapper/$backup_mapper" "$backup_mount" \
+    || error_exit "Failed to mount backup storage"
+
+# -------------------------------------------------------
+# 4. Let user pick which backup tarball to use
+# -------------------------------------------------------
+
+backups=$(ls "$backup_mount"/backup-*.tgz 2>/dev/null)
+[ -z "$backups" ] && error_exit "No backups found"
+
+set --
+for f in $backups; do
+    b=$(basename "$f")
+    set -- "$@" "$b" "$b"
+done
+
+selection=$(dialog --menu "Select backup file:" 20 70 10 "$@" --stdout)
+[ -z "$selection" ] && error_exit "No backup selected"
+
+tarball="$backup_mount/$selection"
+
+
+# -------------------------------------------------------
+# 5. Extract file list from backup
+# -------------------------------------------------------
+
+tmp_list=$(mktemp)
+register_tmpfile "$tmp_list"
+
+tar -tzf "$tarball" > "$tmp_list" || error_exit "Failed to read backup"
+
+# build checklist entries
+set --
+while read -r file; do
+    # TAG  DESCRIPTION   off
+    set -- "$@" "$file" "$file" off
+done < "$tmp_list"
+
+
+# -------------------------------------------------------
+# 6. User selects files to restore
+# -------------------------------------------------------
+
+selected=$(dialog --checklist \
+    "Select files to restore from:\n$selection" \
+    25 80 18 \
+    "$@" \
+    --stdout)
+
+[ -z "$selected" ] && error_exit "No files selected"
+
+
+# -------------------------------------------------------
+# 7. Perform the restore
+# -------------------------------------------------------
+
+dialog --title "Restoring" --msgbox "Restoring selected files..." 8 50
+
+# BusyBox tar requires: tar -xzf tarball file1 file2 ...
+# Convert selected items into normal positional parameters
+set -- $selected
+
+tar -xzf "$tarball" -C "$persist_mount" "$@" \
+    || error_exit "Restore failed"
+
+
+# -------------------------------------------------------
+# 8. Cleanup
+# -------------------------------------------------------
+
+umount "$persist_mount"
+cryptsetup close "$ps_mapper"
+
+umount "$backup_mount"
+cryptsetup close "$backup_mapper" 2>/dev/null
+
+dialog --title "Restore Complete" --msgbox \
+"Selected files restored successfully." 10 50
+

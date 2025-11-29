@@ -1,0 +1,11 @@
+mc
+mc-data
+dialog
+dmsetup
+cryptsetup
+cryptsetup-initramfs
+libcom-err2
+gpm
+parted
+gdisk
+cloud-guest-utils

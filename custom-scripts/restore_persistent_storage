@@ -1,0 +1,97 @@
+#!/bin/sh
+# restore_persistent_storage (NO gauge)
+
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+# -------------------------------------------------------
+# 1. Mount persistent storage (same process as backup)
+# -------------------------------------------------------
+
+persist_mount=$(mktemp -d -p /mnt)
+register_tmpdir "$presist_mount"
+
+ps_dev=$(scan_for_device | sed -n 2p)
+[ -z "$ps_dev" ] && error_exit "Could not locate persistent storage device"
+
+clear_storage "$ps_dev"
+
+ps_mapper="crypt-$(basename "$ps_dev")"
+
+open_luks "$ps_dev" "$ps_mapper" "persistent storage" || error_exit "Failed to unlock persistent storage"
+mount "/dev/mapper/$ps_mapper" "$persist_mount" || error_exit "Failed to mount persistent storage"
+
+# -------------------------------------------------------
+# 2. Read backup device UUID from persistent storage
+# -------------------------------------------------------
+
+backup_uuid=$(cat "$persist_mount/.backup" 2>/dev/null)
+[ -z "$backup_uuid" ] && error_exit "No backup target configured"
+
+# -------------------------------------------------------
+# 3. Locate the backup device via UUID
+# -------------------------------------------------------
+
+backup_dev=$(blkid | grep "$backup_uuid" | cut -d: -f1)
+[ -z "$backup_dev" ] && error_exit "Backup device not found"
+
+clear_storage "$backup_dev"
+
+backup_mapper="crypt-$(basename "$backup_dev")"
+
+open_luks "$backup_dev" "$backup_mapper" "backup storage" || error_exit "Failed to unlock backup storage"
+
+# -------------------------------------------------------
+# 4. Mount backup device
+# -------------------------------------------------------
+
+backup_mount=$(mktemp -d -p /mnt)
+register_tmpdir "$backup_mount"
+
+mount "/dev/mapper/$backup_mapper" "$backup_mount" || error_exit "Failed to mount backup storage"
+
+# -------------------------------------------------------
+# 5. Select backup tarball
+# -------------------------------------------------------
+
+backups=$(ls "$backup_mount"/backup-*.tgz 2>/dev/null)
+[ -z "$backups" ] && error_exit "No backup files found"
+
+# build dialog menu
+set --
+for f in $backups; do
+    b=$(basename "$f")
+    set -- "$@" "$b" "$b"
+done
+
+selection=$(dialog --menu "Select backup to restore:" 20 70 10 "$@" --stdout)
+[ -z "$selection" ] && error_exit "No backup selected"
+
+tarball="$backup_mount/$selection"
+
+dialog --title "Restore" --yesno "Restore this backup?\n\n$selection" 10 60
+[ $? -ne 0 ] && error_exit "Restore cancelled"
+
+# -------------------------------------------------------
+# 6. Extract backup (NO gauge)
+# -------------------------------------------------------
+
+dialog --title "Restoring" --msgbox "Restoring backup:\n$selection" 10 60
+
+tar -xzf "$tarball" -C "$persist_mount" || error_exit "Restore failed"
+
+# -------------------------------------------------------
+# 7. Cleanup
+# -------------------------------------------------------
+
+umount "$persist_mount"
+cryptsetup close "$ps_mapper"
+
+umount "$backup_mount"
+cryptsetup close "$backup_mapper" 2>/dev/null
+
+rm -r "$persist_mount"
+rm -r "$backup_mount"
+
+dialog --title "Restore Complete" --msgbox "Restore completed successfully." 10 50
+

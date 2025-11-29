@@ -1,0 +1,30 @@
+#!/bin/sh
+set -e
+
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+# Get iso + data partitions from scan_for_device
+if result="$(scan_for_device)"; then
+    # Read ISO and data partitions line by line
+    iso_dev="$(echo "$result" | head -n1)"
+    data_dev="$(echo "$result" | tail -n1)"	
+else
+    error_exit "Unable to find USB with ISO and extended-data partitions."
+fi
+
+PART="$data_dev"
+SIZE_MB=2
+ echo "Luks Data Drive located on $data_dev"
+ echo "Wiping keys"
+
+# Overwrite first 2MiB three times
+i=0
+while [ "$i" -lt 3 ]; do
+    dd if=/dev/random of="$PART" bs=1M count="$SIZE_MB" 2>/dev/null
+    i=$((i + 1))
+done
+
+# Force writes to media
+sync
+

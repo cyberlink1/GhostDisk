@@ -1,0 +1,21 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+repair_luks_volume() {
+    # 1) Select LUKS partition
+    entry="$(list_luks_partition)" || error_exit "No LUKS partitions found."
+    dev="$(echo "$entry" | awk '{print $1}')"
+
+    # 2) Confirm destructive action
+    dialog --yesno \
+        "WARNING: Repairing the LUKS header will modify metadata on:\n\n  $dev\n\nProceed?" \
+        12 60 --stdout
+    [ $? -ne 0 ] && return 1
+
+    # 3) Repair LUKS
+    repair_luks "$dev" || error_exit "LUKS repair failed."
+}
+
+repair_luks_volume
+

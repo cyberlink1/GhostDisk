@@ -1,0 +1,68 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+cfdisk_wrapper() {
+
+    # 1) Build a list of top-level block devices
+    letters="a b c d e f g h i j k l m n o p q r s t u v w x y z"
+    letter_index=1
+    set --  # clear positional parameters
+
+    for dev_path in /sys/block/*; do
+        [ -d "$dev_path" ] || continue
+        dev_name=$(basename "$dev_path")
+
+        # Skip virtual/pseudo devices
+        case "$dev_name" in
+            ram*|loop*|dm-*|md*|zram*|rootfs|tmpfs|proc|sys|devtmpfs|fd*)
+                continue
+                ;;
+        esac
+
+        # Skip devices with no size
+        [ -e "$dev_path/size" ] || continue
+
+        # Manufacturer/vendor info if available
+        vendor="Unknown"
+        [ -f "$dev_path/device/vendor" ] && vendor=$(tr -d ' ' < "$dev_path/device/vendor" 2>/dev/null)
+
+        letter=$(echo $letters | cut -d' ' -f"$letter_index")
+        letter_index=$((letter_index + 1))
+
+        set -- "$@" "$letter" "/dev/$dev_name ($vendor)"
+    done
+
+    [ $# -eq 0 ] && error_exit "No top-level block devices found."
+
+    # 2) Ask user which device to use
+    selection=$(dialog --clear --title "Select Disk for cfdisk" \
+        --menu "Choose a disk:" 20 60 10 "$@" --stdout)
+    [ $? -ne 0 ] && exit 1
+    [ -z "$selection" ] && exit 1
+
+    # 3) Map selection to device path
+    index=1
+    for dev_path in /sys/block/*; do
+        dev_name=$(basename "$dev_path")
+        # Skip virtual/pseudo devices
+        case "$dev_name" in
+            ram*|loop*|dm-*|md*|zram*|rootfs|tmpfs|proc|sys|devtmpfs|fd*)
+                continue
+                ;;
+        esac
+        if [ "$selection" = "$(echo $letters | cut -d' ' -f $index)" ]; then
+            device="/dev/$dev_name"
+            break
+        fi
+        index=$((index + 1))
+    done
+
+    [ -z "$device" ] && error_exit "Failed to resolve selected device."
+
+    # 4) Launch cfdisk
+    cfdisk "$device"
+}
+
+cfdisk_wrapper
+

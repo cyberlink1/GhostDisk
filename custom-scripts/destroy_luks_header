@@ -1,0 +1,25 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+destroy_luks_header() {
+    # 1) Select LUKS partition
+    entry="$(list_luks_partition)" || error_exit "No LUKS partitions found."
+    dev="$(echo "$entry" | awk '{print $1}')"
+
+    # 2) Confirm destructive action
+    dialog --yesno \
+        "WARNING: This will DESTROY THE LUKS HEADER on:\n\n  $dev\n\nAll encrypted data will be permanently inaccessible.\nContinue?" \
+        15 60 --stdout
+    [ $? -ne 0 ] && return 1
+
+    # 3) Erase LUKS keys
+    erase_luks "$dev" || error_exit "Failed to destroy LUKS header"
+
+    dialog --title "Success" --msgbox \
+        "LUKS header destroyed on $dev.\nAll data is now inaccessible." \
+        8 50 --stdout
+}
+
+destroy_luks_header
+

@@ -1,0 +1,13 @@
+librsvg2-common
+fonts-quicksand
+xorg
+xserver-xorg
+xserver-xorg-core
+xserver-xorg-video-all
+xserver-xorg-video-vesa
+xserver-xorg-input-all
+xserver-xorg-input-libinput
+task-english
+lightdm
+libinput-tools
+xinput

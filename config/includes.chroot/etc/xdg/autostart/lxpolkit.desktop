@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PolicyKit Authentication Agent
+Comment=Handles PolicyKit authentication requests
+Exec=lxpolkit
+Icon=
+Terminal=false
+X-GNOME-Autostart-enabled=true
+NoDisplay=false

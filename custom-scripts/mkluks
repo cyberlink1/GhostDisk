@@ -1,0 +1,30 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+# ---- Main ----
+    dialog --title "Notice" --msgbox \
+        "We are going to set up your encrypted storage\nYou will be asked to enter your password twice\nThen it will detect your storage and setup the encrypted storage" \
+        10 50 --stdout
+
+# Get iso + data partitions from scan_for_device
+if result="$(scan_for_device)"; then
+    # Read ISO and data partitions line by line
+    iso_dev="$(echo "$result" | head -n1)"
+    data_dev="$(echo "$result" | tail -n1)"	
+else
+    error_exit "Unable to find USB with ISO and extended-data partitions."
+fi
+
+# Check if data_dev has LUKS
+if check_luks "$data_dev"; then
+    
+    resize_partition_full "$data_dev"
+    	
+    # Prompt user for password (returns via stdout)
+    LUKS_PASS="$(ask_password_twice)"
+    
+    # Create LUKS on data partition
+    create_luks "$data_dev" "$LUKS_PASS"
+fi
+

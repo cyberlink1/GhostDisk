@@ -1,0 +1,98 @@
+#!/bin/sh
+# luks-list-keys.sh - formatted list of LUKS2 keyslots; show selected slot block
+# BusyBox/ash compatible
+
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+TMPDUMP=$(mktemp) || exit 1
+register_tmpfile "$TMPDUMP"
+TMPSLOTMAP=$(mktemp) || { rm -f "$TMPDUMP"; exit 1; }
+register_tmpfile "$TMPSLOTMAP"
+
+
+###############################################################
+# 1) Select partition
+###############################################################
+sel=$(list_luks_partition) || exit 1
+DEV=$(echo "$sel" | awk '{print $1}')
+
+cryptsetup luksDump "$DEV" > "$TMPDUMP" 2>&1 || true
+
+###############################################################
+# 2) Extract ONLY the Keyslots block into ${TMPDUMP}.slots
+###############################################################
+awk '
+    /Keyslots:/ {flag=1; next}
+    flag && /^[[:space:]]/ {print; next}
+    flag && !/^[[:space:]]/ {exit}
+' "$TMPDUMP" > "${TMPDUMP}.slots"
+
+if [ ! -s "${TMPDUMP}.slots" ]; then
+    dialog --title "LUKS Keyslots" --msgbox "No keyslots found in luksDump output." 8 50 --stdout
+    exit 1
+fi
+
+###############################################################
+# 3) Build menu (letter → slot number)
+###############################################################
+letters="a b c d e f g h"
+letter_index=1
+MENUARGS=""
+> "$TMPSLOTMAP"
+
+oldIFS=$IFS
+IFS='
+'
+
+for line in $(cat "${TMPDUMP}.slots"); do
+    IFS=$oldIFS
+    slot=$(echo "$line" | sed -n 's/^[ \t]*\([0-9]\+\):.*/\1/p')
+    [ -z "$slot" ] && continue
+
+    letter=$(echo $letters | cut -d' ' -f $letter_index)
+    letter_index=$((letter_index+1))
+
+    echo "$letter $slot" >> "$TMPSLOTMAP"
+    MENUARGS="$MENUARGS \"$letter\" \"Key Slot $slot\""
+done
+
+IFS=$oldIFS
+
+###############################################################
+# 4) Display slot selection menu
+###############################################################
+eval "CHOICE=\$(dialog --clear --title 'LUKS Keyslots' \
+    --menu 'Select a keyslot to view:' 20 70 12 $MENUARGS --stdout)"
+
+[ -z "$CHOICE" ] && exit 0
+
+SLOT=$(awk -v L="$CHOICE" '$1==L{print $2}' "$TMPSLOTMAP")
+
+###############################################################
+# 5) Extract ONLY the chosen slot from ${TMPDUMP}.slots
+###############################################################
+awk -v slot="$SLOT" '
+    # Start when the header matches e.g. "  1: luks2"
+    $0 ~ "^[[:space:]]*"slot": " {
+        flag = 1
+        next
+    }
+
+    # Stop when next slot header appears
+    flag && $0 ~ "^[[:space:]]*[0-9]+: " {
+        hdr = $0
+        gsub(/^[[:space:]]*|:.*/, "", hdr)
+        if (hdr != slot) exit
+    }
+
+    # Print all sub-lines belonging to this slot
+    flag && /^[[:space:]]/ { print }
+' "${TMPDUMP}.slots" > "${TMPDUMP}.slot.${SLOT}"
+
+###############################################################
+# 6) Show slot contents
+###############################################################
+dialog --title "Key Slot $SLOT - $DEV" \
+       --textbox "${TMPDUMP}.slot.${SLOT}" 20 80 --stdout
+

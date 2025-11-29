@@ -1,0 +1,42 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+format_open_luks_volume() {
+    # 1) Select open LUKS mapping
+    entry="$(list_open_luks)" || error_exit "No open LUKS mappings found."
+    mapname="$(echo "$entry" | awk '{print $1}')"
+    dev="/dev/mapper/$mapname"
+
+    # 2) Select filesystem type
+    fstype=$(dialog --menu "Select filesystem type:" 12 50 5 \
+            ext3 "Create ext3 filesystem" \
+            ext4 "Create ext4 filesystem" \
+            --stdout)
+
+    [ -z "$fstype" ] && error_exit "No filesystem selected."
+
+    # 3) Confirm destructive action
+    dialog --yesno \
+        "WARNING: This will ERASE ALL DATA on:\n\n  $dev\n\nContinue?" \
+        12 60 --stdout
+    [ $? -ne 0 ] && return 1
+
+    # 4) Format with progress gauge
+    format_cmd="mkfs.$fstype -v $dev"
+
+    $format_cmd 2>&1 | while read -r line; do
+        case "$line" in
+            *"Allocating group tables"*) echo "5";  echo "# Allocating group tables";;
+            *"Writing inode tables"*)   echo "25"; echo "# Writing inode tables";;
+            *"Creating journal"*)       echo "85"; echo "# Creating journal";;
+            *"Writing superblocks"*)    echo "95"; echo "# Writing superblocks";;
+        esac
+    done | dialog --gauge "Formatting $dev as $fstype..." 10 60 0 --stdout
+
+    dialog --title "Format Complete" --msgbox \
+        "$dev formatted as $fstype" 8 40 --stdout
+}
+
+format_open_luks_volume
+

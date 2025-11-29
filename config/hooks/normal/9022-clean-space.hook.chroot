@@ -1,0 +1,44 @@
+#!/bin/sh
+
+set -e
+
+#
+# Clean out unneeded files 
+#
+
+# Remove old apt cache
+rm -rf /var/cache/apt/*
+
+# Remove old apt lists
+rm -rf /var/lib/apt/lists/*
+
+# Remove log data from install
+rm -rf /var/log/*
+
+# Remove docs and man pages because we are guys and We dont read the instructions!
+rm -rf /usr/share/doc/*
+rm -rf /usr/share/man/*
+rm -rf /var/cache/man/*
+rm -rf /var/cache/debconf/*
+
+# remove lang files that are not english.
+find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' -exec rm -rf {} +
+
+# Poppler CMaps (keep only Identity-UTF16-H)
+find /usr/share/poppler/cMap -type f ! -name 'Identity-UTF16-H*' -delete
+
+# Keep only English locales
+find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' -exec rm -rf {} +
+
+ # Remove Vim docs and examples to save space
+rm -rf /usr/share/vim/vim*/doc/*
+rm -rf /usr/share/vim/vim*/doc/tutor/*
+rm -rf /usr/share/vim/vim*/examples/*
+rm -rf /usr/share/vim/vim*/syntax/README
+
+# Remove non-English i18n files
+find /usr/share/i18n/locales -mindepth 1 ! -name 'en*' -exec rm -rf {} +
+find /usr/share/i18n/charmaps -type f ! -name '*UTF-8*' -delete
+
+# We dont want kgpg to autostart
+rm -rf /etc/xdg/autostart/org.kde.kgpg.desktop

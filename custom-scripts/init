@@ -1,0 +1,94 @@
+#!/bin/sh
+set -e
+
+. /etc/profile
+export ENV="/etc/profile"
+
+# Mount pseudo filesystems
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs devtmpfs /dev
+mount -t tmpfs tmpfs /tmp
+mount -t tmpfs tmpfs /run
+
+#
+# Load modules
+#
+# Minimal storage module list
+for m in libata ahci nvme-core nvme scsi_mod sd_mod sg xhci-pci xhci-hcd ehci-pci ehci-hcd ohci-pci ohci-hcd uas mmc_core mmc_block sdhci sdhci-pci usb-storage dm-mod dm-crypt essiv xts mbcache jbd2 ext4; do
+    modprobe "$m" || true
+done
+
+# Optional: trigger enumeration delay
+sleep 1
+
+ln -sf /proc/self/fd /dev/fd && ln -sf fd/0 /dev/stdin && ln -sf fd/1 /dev/stdout && ln -sf fd/2 /dev/stderr
+#
+# Parse /proc/cmdline for TARGET=
+#
+for param in $(cat /proc/cmdline); do
+    case $param in
+        target=*)
+            TARGET="${param#target=}"
+            ;;
+    esac
+done
+
+#
+# Sanity check
+#
+if [ -z "$TARGET" ]; then
+    echo "No TARGET specified. Dropping to shell."
+    exec getty -nl /bin/sh 0 /dev/console
+fi
+
+#
+# MODE SELECTOR
+#
+
+case "$TARGET" in
+
+    #
+    #
+    # 1. Drop to shell mode
+    #
+    shell)
+        echo "Entering emergency shell..."
+	sleep 3
+        exec getty -nl /bin/login 0 /dev/console
+	reboot -f
+        ;;
+
+    #
+    # 2. Crypt setup mode
+    #
+    luks)
+        echo "Running Setup..."
+	sleep 3
+        getty -nl /sbin/Menu 0 /dev/console
+        echo "Script finished. Rebooting."
+        sync
+        reboot -f
+        ;;
+
+    #
+    # 3. Wipe block device mode
+    #
+    nuke)
+        echo "Wiping encrypted partition"
+	sleep 3
+	getty -nl /sbin/nuke 0 /dev/console
+        sync
+        reboot -f
+        ;;
+
+    #
+    # Unknown mode
+    #
+    *)
+        echo "Unknown TARGET mode: $TARGET"
+        exec getty -nl /bin/sh 0 /dev/console
+	reboot -f
+        ;;
+esac
+

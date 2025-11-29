@@ -1,0 +1,54 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+change_luks_password() {
+
+    #1 Select LUKS partition
+    selection=$(list_luks_partition) || error_exit "No LUKS partitions found."
+    dev=$(echo "$selection" | awk '{print $1}')
+
+    #2 Ask for current password
+    old_pass="$(ask_password_once "Enter CURRENT password for $dev:")"
+    [ -z "$old_pass" ] && error_exit "Password entry cancelled."
+
+    #3 Ask for new password twice
+    new_pass="$(ask_password_twice)"
+    [ -z "$new_pass" ] && error_exit "New password entry cancelled."
+
+    #4 Add new password to a free keyslot
+    dialog --title "Changing LUKS Password" --infobox "Adding new key..." 8 50 --stdout
+    sleep 1
+
+    old_pass=$(mktemp)
+    register_tmpfile "$old_pass"
+    new_pass=$(mktemp)
+    register_tmpfile "$new_pass"
+    printf "%s" "$old_pass" > "$old_pass"
+    printf "%s" "$new_pass" > "$new_pass"
+
+    cryptsetup luksAddKey --key-file="$old_pass" "$dev" --new-keyfile="$new_pass" >/dev/null 2>&1
+
+    if [ $? -ne 0 ]; then
+        dialog --title "Error" --msgbox "Failed to add new key.\n\n" 12 60 --stdout
+        return 1
+    fi
+
+    #5 Verify the new password works
+    cryptsetup open --key-file="$new_pass" --test-passphrase "$dev" >/dev/null 2>&1
+
+    if [ $? -ne 0 ]; then
+        dialog --title "Error" --msgbox "New password verification failed. Old password still valid." 10 50 --stdout
+        return 1
+    fi
+
+    #6 Remove old password from keyslots
+    # Try each slot and remove the one that matches old password
+    
+    cryptsetup luksRemoveKey --key-file="$old_key" "$dev" >/dev/null 2>&1
+
+    dialog --title "Success" --msgbox "Password changed successfully for:\n$dev" 8 50 --stdout
+}
+
+change_luks_password
+

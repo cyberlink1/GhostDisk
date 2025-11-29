@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+# Replace "liveuser" with whatever username you want
+USERNAME="liveuser"
+PASSWORD="live"
+
+# Create user and set password
+useradd -m -s /bin/bash "$USERNAME"
+echo "$USERNAME:$PASSWORD" | chpasswd
+
+# Add to useful groups
+usermod -aG sudo,adm,cdrom,plugdev,audio,video,netdev "$USERNAME"
+
+# Optional: autologin for LightDM
+mkdir -p /etc/lightdm/lightdm.conf.d
+cat <<EOF > /etc/lightdm/lightdm.conf.d/50-autologin.conf
+[Seat:*]
+autologin-user=$USERNAME
+autologin-user-timeout=0
+EOF
+

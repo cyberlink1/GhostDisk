@@ -1,0 +1,41 @@
+#!/bin/sh
+# luks-add-key.sh - add a new passphrase to LUKS using existing passphrase for auth
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+TMPDUMP=$(mktemp) || exit 1
+register_tmpfile "$TMPDUMP"
+TMPAUTH=$(mktemp) || { rm -f "$TMPDUMP"; exit 1; }
+register_tmpfile "$TMPAUTH"
+TMPNEW=$(mktemp) || { rm -f "$TMPDUMP" "$TMPAUTH"; exit 1; }
+register_tmpfile "TMPNEW"
+TMPOUT=$(mktemp) || { rm -f "$TMPDUMP" "$TMPAUTH" "$TMPNEW"; exit 1; }
+register_tmpfile "$TMPOUT"
+
+sel=$(list_luks_partition) || exit 1
+DEV=$(echo "$sel" | awk '{print $1}')
+
+# Show current keyslot block if helpful (optional)
+#
+# This needs to be improved. Cut so it just displays the keyslots
+cryptsetup luksDump "$DEV" > "$TMPDUMP" 2>&1 || true
+dialog --title "Current LUKS header (truncated)" --textbox "$TMPDUMP" 20 80 --stdout
+
+# Get auth passphrase (existing)
+AUTHPW=$(ask_password_once "Enter existing passphrase to authorize adding a new key:") || { dialog --title "Canceled" --msgbox "Auth canceled." 8 50 --stdout; exit 1; }
+printf "%s" "$AUTHPW" > "$TMPAUTH"
+
+# Get new passphrase (use your ask_password_twice)
+NEWPW=$(ask_password_twice)
+[ $? -ne 0 ] && { dialog --title "Canceled" --msgbox "New passphrase entry canceled." 8 50 --stdout; exit 1; }
+printf "%s" "$NEWPW" > "$TMPNEW"
+
+# Add key — use the reliable ordering you reported
+cryptsetup luksAddKey --key-file="$TMPAUTH" "$DEV" --new-keyfile="$TMPNEW" > "$TMPOUT" 2>&1
+if [ $? -eq 0 ]; then
+    dialog --title "Success" --msgbox "New key added successfully." 7 50 --stdout
+else
+    dialog --title "Failed to add key" --textbox "$TMPOUT" 20 70 --stdout
+    exit 1
+fi
+

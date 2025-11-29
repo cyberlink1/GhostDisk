@@ -1,0 +1,82 @@
+#!/bin/sh
+# luks-delete-key.sh - select a slot and delete it using an existing passphrase
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+TMPDUMP=$(mktemp)|| exit 1
+register_tmpfile "$TMPDUMP"
+TMPSLOTMAP=$(mktemp) || { rm -f "$TMPDUMP"; exit 1; }
+register_tmpfile "$TMPSLOTMAP"
+TMPAUTH=$(mktemp) || { rm -f "$TMPDUMP" "$TMPSLOTMAP"; exit 1; }
+register_tmpfile "$TMPAUTH"
+TMPOUT=$(mktemp) || { rm -f "$TMPDUMP" "$TMPSLOTMAP" "$TMPAUTH"; exit 1; }
+register_tmpfile "$TMPOUT"
+
+sel=$(list_luks_partition) || exit 1
+DEV=$(echo "$sel" | awk '{print $1}')
+
+# Dump header
+cryptsetup luksDump "$DEV" > "$TMPDUMP" 2>&1 || true
+
+# Extract keyslots block (BusyBox-safe)
+awk '/Keyslots:/ {flag=1; next} flag && /^[[:space:]]/ {print} flag && !/^[[:space:]]/ {exit}' "$TMPDUMP" > "${TMPDUMP}.slots"
+
+if [ ! -s "${TMPDUMP}.slots" ]; then
+    dialog --title "No Keyslots" --msgbox "No keyslots listed in luksDump for $DEV." 8 60 --stdout
+    exit 1
+fi
+
+# Build letter->slot map and menu args
+letters="a b c d e f g h i j k l m n o p q r s t u v w x y z"
+letter_index=1
+MENUARGS=""
+> "$TMPSLOTMAP"
+
+oldIFS=$IFS
+IFS='
+'
+for line in $(cat "${TMPDUMP}.slots"); do
+    IFS=$oldIFS
+    slot=$(echo "$line" | sed -n 's/^[ \t]*\([0-9]\+\):.*/\1/p')
+    [ -z "$slot" ] && continue
+    letter=$(echo $letters | cut -d' ' -f $letter_index)
+    letter_index=$((letter_index + 1))
+    echo "$letter $slot" >> "$TMPSLOTMAP"
+    MENUARGS="$MENUARGS \"$letter\" \"Key Slot $slot - Active\""
+done
+IFS=$oldIFS
+
+# Nothing to delete
+if [ -z "$MENUARGS" ]; then
+    dialog --title "Nothing" --msgbox "No keyslots available to delete on $DEV." 8 50 --stdout
+    exit 1
+fi
+
+# Select slot
+eval "SELLETTER=\$(dialog --clear --title 'Delete Keyslot' --menu 'Choose slot to delete:' 20 70 12 $MENUARGS --stdout)"
+[ $? -ne 0 ] && exit 1
+
+SLOT=$(awk -v l="$SELLETTER" '$1==l{print $2}' "$TMPSLOTMAP")
+[ -z "$SLOT" ] && { dialog --title "Error" --msgbox "Slot lookup failed." 8 50 --stdout; exit 1; }
+
+# Confirm deletion
+dialog --title "Confirm Delete" --yesno "Delete keyslot $SLOT on $DEV?\n\nThis is irreversible." 12 60 --stdout
+[ $? -ne 0 ] && exit 1
+
+# Ask for auth (existing passphrase)
+AUTHPW=$(ask_password_once "Enter existing passphrase to authorize deletion:") || {
+    dialog --title "Canceled" --msgbox "Auth canceled." 8 50 --stdout
+    exit 1
+}
+printf "%s" "$AUTHPW" > "$TMPAUTH"
+chmod 600 "$TMPAUTH"
+
+# Perform deletion
+cryptsetup luksKillSlot --key-file="$TMPAUTH" "$DEV" "$SLOT" > "$TMPOUT" 2>&1
+if [ $? -eq 0 ]; then
+    dialog --title "Deleted" --msgbox "Keyslot $SLOT deleted successfully." 7 50 --stdout
+else
+    dialog --title "Failed" --textbox "$TMPOUT" 20 70 --stdout
+    exit 1
+fi
+

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Auto Screen Rotation
+Comment=Automatically rotate screen based on accelerometer
+Exec=/usr/local/bin/auto-rotate.sh
+Icon=display  # optional, can use any icon you like
+Terminal=false
+X-GNOME-Autostart-enabled=true
+

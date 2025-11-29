@@ -1,0 +1,72 @@
+#!/bin/sh
+# backup_presistant_storage with dialog gauge
+
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+date_str=$(date +%Y%m%d-%H%M%S)
+
+# Mount persistent storage
+persist_mount=$(mktemp -d -p /mnt)
+register_tmpdir "$persist_mount"
+
+# -------------------------------------------------------
+# Get persistent storage block device using scan_for_device
+# -------------------------------------------------------
+ps_dev=$(scan_for_device | sed -n 2p)
+[ -z "$ps_dev" ] && error_exit "Could not locate persistent storage device"
+clear_storage "$ps_dev"
+
+ps_mapper="crypt-$(basename "$ps_dev")"
+
+open_luks "$ps_dev" "$ps_mapper" "presistent storage" || error_exit "Failed to unlock persistent storage"
+
+mount "/dev/mapper/$ps_mapper" "$persist_mount" || error_exit "Failed to mount persistent storage"
+
+
+# Read backup target UUID
+backup_uuid=$(cat "$persist_mount/.backup" 2>/dev/null)
+[ -z "$backup_uuid" ] && error_exit "No backup target configured"
+
+# Find backup device by UUID
+backup_dev=$(blkid | grep $(cat "$persist_mount/.backup") | cut -d: -f1)
+
+clear_storage "$backup_dev"
+
+[ -z "$backup_dev" ] && error_exit "Backup device not found"
+backup_mapper="crypt-$(basename $backup_dev)"
+
+# Open LUKS if needed
+open_luks "$backup_dev" "$backup_mapper" "backup storage" || error_exit "Failed to unlock persistent storage"
+
+
+# Mount backup device
+backup_mount=$(mktemp -d -p /mnt)
+register_tmpdir "$backup_mount"
+
+mount "/dev/mapper/$backup_mapper" "$backup_mount" || error_exit "Failed to mount backup storage"
+
+
+# Create backup with gauge
+tarball="$backup_mount/backup-$date_str.tgz"
+
+# Count total files
+total_files=$(find "$persist_mount" -type f | wc -l)
+count=0
+
+# 1) Make a temp file with the list of files
+
+tarball="$backup_mount/backup-$(date +%Y%m%d-%H%M%S).tgz"
+
+# Run tar in background
+dialog --title "Backup" --msgbox "Backuping up presistant storage:\n$tarball" 10 60
+tar -czf "$tarball" -C "$persist_mount" ./ 
+cd /
+# Clean up
+umount "$persist_mount" 2>/dev/null
+umount "$backup_mount" 2>/dev/null
+cryptsetup close "$ps_mapper" 2>/dev/null
+cryptsetup close "$backup_mapper" 2>/dev/null
+
+dialog --title "Backup Complete" --msgbox "Backup completed successfully:\n$tarball" 10 60
+

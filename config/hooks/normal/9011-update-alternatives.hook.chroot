@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+BUSYBOX=/bin/busybox
+
+# Ensure BusyBox exists
+[ -x "$BUSYBOX" ] || exit 1
+
+# List of commands to link
+for cmd in sh cp mv rm ln ls cat grep sed awk tar gzip bzip2 xz ping find diff cpio mount umount passwd hostname vi more wget cron less; do
+    if [ ! -e "/bin/$cmd" ]; then
+        ln -s busybox "/bin/$cmd"
+    fi
+done
+

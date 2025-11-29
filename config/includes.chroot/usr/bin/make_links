@@ -1,0 +1,39 @@
+#!/bin/bash
+
+CONFIG="$HOME/Encrypted/.cl.cfg"
+
+if [ ! -f "$CONFIG" ]; then
+    echo "[!] Config file not found: $CONFIG"
+    exit 1
+fi
+
+while IFS='|' read -r state type item enc; do
+    # Skip disabled entries
+    [ "$state" != "+" ] && continue
+
+    # Full paths
+    src="$HOME/$item"               # location in home directory
+    dest_root=$(eval echo "$enc")   # encrypted root
+    dest="$dest_root/$item"         # full path of encrypted file/dir
+
+    # Skip if encrypted target doesn't exist
+    if [ ! -e "$dest" ]; then
+        echo "[!] Skipping $item — encrypted target missing: $dest"
+        continue
+    fi
+
+    # Remove any existing source
+    if [ -e "$src" ] || [ -L "$src" ]; then
+        echo "[+] Removing existing: $src"
+        rm -rf "$src"
+    fi
+
+    # Ensure parent directory exists in home
+    mkdir -p "$(dirname "$src")"
+
+    # Create symlink
+    ln -s "$dest" "$src"
+    echo "[+] Linked $src -> $dest"
+
+done < "$CONFIG"
+

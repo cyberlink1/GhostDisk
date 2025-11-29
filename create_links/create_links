@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+import os
+import subprocess
+import tkinter as tk
+from tkinter import ttk, messagebox
+
+CONFIG_PATH = os.path.expanduser("~/Encrypted/.cl.cfg")
+INSTALL_SCRIPT = os.path.expanduser("/usr/bin/move_and_link")  # path to your script
+
+# -------------------------
+# Read / Write Config
+# -------------------------
+
+def read_config():
+    items = []
+    if not os.path.exists(CONFIG_PATH):
+        return items
+    with open(CONFIG_PATH, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("|")
+            if len(parts) == 4:
+                items.append({
+                    "state": parts[0],
+                    "type": parts[1],
+                    "item": parts[2],
+                    "enc":  parts[3]
+                })
+    return items
+
+
+def write_config(items):
+    with open(CONFIG_PATH, "w") as f:
+        for item in items:
+            f.write(f"{item['state']}|{item['type']}|{item['item']}|{item['enc']}\n")
+
+
+# -------------------------
+# GUI Setup
+# -------------------------
+
+def setup_gui():
+    items = read_config()
+
+    root = tk.Tk()
+    root.title("Encrypted Link Manager")
+
+    frame = ttk.Frame(root, padding=10)
+    frame.grid()
+
+    ttk.Label(frame, text="Select items to enable (+):").grid(row=0, column=0, columnspan=3)
+
+    check_vars = []
+
+    for idx, item in enumerate(items):
+        var = tk.BooleanVar(value=(item["state"] == "+"))
+        chk = ttk.Checkbutton(frame, text=f"{item['item']} ({item['type']})", variable=var)
+        chk.grid(row=idx + 1, column=0, sticky="w")
+        check_vars.append(var)
+
+    # Save config
+    def save_config():
+        for i, var in enumerate(check_vars):
+            items[i]["state"] = "+" if var.get() else "-"
+        write_config(items)
+        messagebox.showinfo("Saved", "Configuration saved.")
+
+    # Call install script
+    def run_install():
+        save_config()
+        if not os.path.exists(INSTALL_SCRIPT):
+            messagebox.showerror("Error", f"Install script not found:\n{INSTALL_SCRIPT}")
+            return
+        try:
+            subprocess.run([INSTALL_SCRIPT], check=True)
+            messagebox.showinfo("Install", "Move & link completed successfully.")
+        except subprocess.CalledProcessError as e:
+            messagebox.showerror("Install Failed", str(e))
+
+    # Buttons
+    ttk.Button(frame, text="Save", command=save_config).grid(row=len(items)+2, column=0, padx=5)
+    ttk.Button(frame, text="Install", command=run_install).grid(row=len(items)+2, column=1, padx=5)
+    ttk.Button(frame, text="Quit", command=root.destroy).grid(row=len(items)+2, column=2, padx=5)
+
+    root.mainloop()
+
+
+# -------------------------
+# Main
+# -------------------------
+
+if __name__ == "__main__":
+    setup_gui()
+

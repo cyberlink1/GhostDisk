@@ -1,0 +1,13 @@
+polkit.addRule(function(action, subject) {
+    // Replace 'cl' with your actual username
+    if (action.id == "org.freedesktop.udisks2.filesystem-mount" &&
+        subject.user == "cl") {
+        return polkit.Result.YES;
+    }
+
+    if (action.id == "org.freedesktop.udisks2.encrypted-unlock" &&
+        subject.user == "cl") {
+        return polkit.Result.YES;
+    }
+});
+

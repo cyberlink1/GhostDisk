@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Autolink Encrypted
+Exec=/usr/bin/autolink
+Comment=Wait for ~/Encrypted then create links
+X-LXQt-Need-Tray=false
+Terminal=false
+OnlyShowIn=XFCE;LXQt;
+

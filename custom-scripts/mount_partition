@@ -1,0 +1,64 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+mount_partition() {
+    # 1) Select partition
+    #dev="$(select_partition)" || error_exit "No partitions found."
+    dev="$(list_luks_partition | awk '{print $1}')" || error_exit "No partitions found."
+
+    mapper_name=""
+    # 2) Handle LUKS
+    if cryptsetup isLuks "$dev" >/dev/null 2>&1; then
+
+        # Check if already unlocked
+        existing_mapper=""
+        for path in /dev/mapper/*; do
+            [ -e "$path" ] || continue
+            m=$(basename "$path")
+            mapped_dev=$(cryptsetup status "$m" 2>/dev/null | awk '/device:/ {print $2}' )
+	    mapped_dev=$(readlink -f "$mapped_dev" 2>/dev/null)
+	    [ -z "$mapped_dev" ] && continue
+
+            if [ "$mapped_dev" = "$dev" ]; then
+                existing_mapper="$m"
+                break
+            fi
+        done
+        if [ -n "$existing_mapper" ]; then
+            # Already unlocked
+            mapper_name="$existing_mapper"
+            dev="/dev/mapper/$mapper_name"
+        else
+            # Ask user for mapper name
+	    devi="${dev#/dev/}"
+            mapper_name=$(dialog --title "Mapper Name" \
+                --inputbox "Enter a name for the LUKS mapper for $dev:" 10 50 "crypt-$devi" --stdout)
+            [ -z "$mapper_name" ] && error_exit "Mapper name entry cancelled."
+
+            # Ask password
+            pass="$(ask_password_once "Enter password to unlock $dev:")"
+            [ -z "$pass" ] && error_exit "Password entry cancelled."
+
+            # Open LUKS
+            echo -n "$pass" | cryptsetup open "$dev" "$mapper_name" - || error_exit "Failed to open LUKS device"
+            dev="/dev/mapper/$mapper_name"
+        fi
+    else
+        # Non-LUKS device: sanitize device name for mountpoint
+        mapper_name=$(basename "$dev" | tr -c 'A-Za-z0-9_' '_')
+    fi
+
+    # 3) Create mount directory
+    target_mnt="/mnt/$mapper_name"
+    mkdir -p "$target_mnt" || error_exit "Failed to create mount point $target_mnt"
+
+    # 4) Mount
+    mount "$dev" "$target_mnt" || error_exit "Failed to mount $dev on $target_mnt"
+
+    dialog --title "Mounted" --msgbox \
+        "$dev mounted on $target_mnt" 8 50 --stdout
+}
+
+mount_partition
+

@@ -1,0 +1,15 @@
+#!/bin/sh
+. /lib/functions.sh
+trap cleanup EXIT INT TERM
+
+status_luks_volume() {
+    # 1) Select LUKS partition
+    entry="$(list_open_luks)" || error_exit "No open LUKS partitions found."
+    dev="$(echo "$entry" | awk '{print $1}')"
+
+    # 2) Show status
+    status_luks "/dev/mapper/$dev"
+}
+
+status_luks_volume
+

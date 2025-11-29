@@ -1,0 +1,16 @@
+label ghost-disk-@FLAVOUR@
+	menu label Ghost-Disk
+	menu default
+	linux @LINUX@
+	initrd @INITRD@
+	append @APPEND_LIVE@
+label SelfDestruct-@FLAVOUR@
+	menu label SelfDestruct
+	linux /live/vmlinuz
+	initrd /live/initramfs-mini.img
+	append init=/init quiet nosgx target=nuke
+label SetupData-@FLAVOUR@
+	menu label Setup
+	linux /live/vmlinuz
+	initrd initrd=/live/initramfs-mini.img
+	append initrd=/live/initramfs-mini.img init=/init quiet nosgx target=luks

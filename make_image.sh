@@ -208,6 +208,7 @@ clean() {
 	rm -r "$HOME_DIR/tmp" || true
 	rm "$HOME_DIR/config/includes.binary/live/initramfs-mini.img" || true
 	rm "$HOME_DIR/custom-scripts/functions.sh" || true
+	rm "$HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh" || true
 	echo "Done"
 }
 

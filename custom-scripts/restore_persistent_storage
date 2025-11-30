@@ -9,7 +9,7 @@ trap cleanup EXIT INT TERM
 # -------------------------------------------------------
 
 persist_mount=$(mktemp -d -p /mnt)
-register_tmpdir "$presist_mount"
+register_tmpdir "$persist_mount"
 
 ps_dev=$(scan_for_device | sed -n 2p)
 [ -z "$ps_dev" ] && error_exit "Could not locate persistent storage device"

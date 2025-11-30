@@ -1,5 +1,5 @@
 #!/bin/sh
-# backup_presistant_storage with dialog gauge
+# backup_persistent_storage with dialog gauge
 
 . /lib/functions.sh
 trap cleanup EXIT INT TERM
@@ -19,7 +19,7 @@ clear_storage "$ps_dev"
 
 ps_mapper="crypt-$(basename "$ps_dev")"
 
-open_luks "$ps_dev" "$ps_mapper" "presistent storage" || error_exit "Failed to unlock persistent storage"
+open_luks "$ps_dev" "$ps_mapper" "persistent storage" || error_exit "Failed to unlock persistent storage"
 
 mount "/dev/mapper/$ps_mapper" "$persist_mount" || error_exit "Failed to mount persistent storage"
 

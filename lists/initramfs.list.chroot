@@ -9,3 +9,10 @@ gpm
 parted
 gdisk
 cloud-guest-utils
+busybox
+gnupg
+gnupg-agent
+gnupg-pkcs11-scd
+pcscd
+libpcsclite1
+openssl

@@ -2,7 +2,7 @@
 # Scan for USB device containing a partition with a target UUID and configure LUKS mounting
 
 # UUID to match (set by make_image.sh)
-TARGET_UUID="82817F06-C1AD-4C5C-BBCE-399981FAF986"
+TARGET_UUID="4216BA11-74EB-4304-ACC9-915A3A3C1645"
 
 configure_device() {
     local iso_dev="$1"

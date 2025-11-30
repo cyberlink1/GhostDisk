@@ -90,12 +90,6 @@ check_luks <partition>
  PASSWORD INPUT ROUTINES
 --------------------------------------------------------------------------------
 
-get_password
-    Prompts user twice for a password.
-    Verifies match.
-    Returns password via stdout.
-    Reboots on cancellation.
-
 ask_password_once [prompt]
     Shows a single password dialog.
     Returns trimmed password via stdout.

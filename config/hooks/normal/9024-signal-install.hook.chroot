@@ -12,4 +12,4 @@ cat signal-desktop.sources | tee /etc/apt/sources.list.d/signal-desktop.sources 
 apt update 
 apt install signal-desktop
 rm signal-desktop-keyring.gpg
-rm ignal-desktop.sources
+rm signal-desktop.sources

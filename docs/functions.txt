@@ -1,6 +1,6 @@
 ================================================================================
                                functions.sh
-                         ASCII FUNCTION DOCUMENTATION
+                          FUNCTION DOCUMENTATION
 ================================================================================
 
 This file contains a collection of utility routines used inside an initramfs

@@ -1,0 +1,150 @@
+===============================================================
+                     GHOST DISK — QUICKSTART
+===============================================================
+
+This guide walks you through building the image, preparing
+your encrypted persistent storage, and starting the system.
+
+---------------------------------------------------------------
+1. CLONE THE REPOSITORY
+---------------------------------------------------------------
+Clone this project to your local machine:
+
+    git clone https://github.com/cyberlink1/GhostDisk
+    cd GhostDisk
+
+---------------------------------------------------------------
+2. EDIT CONFIGURATION
+---------------------------------------------------------------
+Edit the configuration file and set:
+
+    - Username
+    - Passwords (root + user)
+    - Preferences
+
+File to edit:
+
+    make_image.cfg
+
+
+---------------------------------------------------------------
+3. BUILD THE IMAGE
+---------------------------------------------------------------
+Run:
+
+    sudo ./make_image.sh build
+
+When complete, the script will produce:
+
+    <filename>.img
+
+
+---------------------------------------------------------------
+4. WRITE THE IMAGE TO USB / SD / MEMORY STICK
+---------------------------------------------------------------
+Use your preferred tool:
+
+    dd, balenaEtcher, Raspberry Pi Imager, etc.
+
+Example (DANGEROUS — double-check drive):
+
+    sudo dd if=<filename>.img of=/dev/sdX bs=4M status=progress
+
+
+---------------------------------------------------------------
+5. BOOT AND SELECT “SETUP”
+---------------------------------------------------------------
+At the boot menu, choose:
+
+    Setup
+
+
+---------------------------------------------------------------
+6. LOGIN (ROOT)
+---------------------------------------------------------------
+Use the root password you set in:
+
+    make_image.cfg
+
+
+---------------------------------------------------------------
+7. RUN "SETUP INITIAL PERSISTENT STORAGE"
+---------------------------------------------------------------
+Select menu item:
+
+    Setup initial persistent storage
+
+This will:
+
+    - Detect your boot device
+    - Create an encrypted LUKS volume
+    - Format it as ext3
+    - Install the base `.cl.cfg` file
+    - Prepare the persistent environment
+
+
+---------------------------------------------------------------
+8. EXIT AND REBOOT
+---------------------------------------------------------------
+Exit the menu → the system reboots automatically.
+
+
+---------------------------------------------------------------
+9. BOOT INTO "GHOST DISK"
+---------------------------------------------------------------
+From the boot menu:
+
+    Select "Ghost Disk"  (or wait for timeout)
+
+
+---------------------------------------------------------------
+10. LOGIN (USER)
+---------------------------------------------------------------
+Login with the *user* account set in:
+
+    make_image.cfg
+
+
+---------------------------------------------------------------
+11. UNLOCK ENCRYPTED STORAGE
+---------------------------------------------------------------
+You will be prompted for a password.
+
+Enter the password created in **Step 7**.
+
+Your encrypted storage will mount at:
+
+    ~/Encrypted
+
+
+---------------------------------------------------------------
+12. OPEN PERSISTENT STORAGE SETUP TOOL
+---------------------------------------------------------------
+From the desktop:
+
+    Start Menu → Accessories → Setup Persistent Storage
+
+
+---------------------------------------------------------------
+13. SELECT FILES TO LINK
+---------------------------------------------------------------
+In the persistent storage tool you can choose:
+
+    - Which files
+    - Which config directories
+    - What personal data
+
+Click **Install** to:
+
+    - Create symlinks
+    - Move selected files into `~/Encrypted`
+
+
+---------------------------------------------------------------
+                          YOU'RE DONE!
+---------------------------------------------------------------
+Your browser data, app settings, user files, and other
+selected items now persist securely in your encrypted storage.
+
+Enjoy using Ghost Disk.
+

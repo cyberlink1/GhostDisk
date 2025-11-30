@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=Setup Presistant Storage
-Comment=Creates links to specific files and directories between your home directory and presistant Encrypted storage that will auto setup on login.
+Name=Setup Persistent Storage
+Comment=Creates links to specific files and directories between your home directory and persistent Encrypted storage that will auto setup on login.
 Exec=/usr/bin/create_links
 Icon=encryption-icon
 Terminal=false

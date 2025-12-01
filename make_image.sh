@@ -189,13 +189,14 @@ build_iso() {
             done
             ;;
     esac    
+    cd $HOME_DIR
     lb clean > "$LOG_PATH/build_iso.log" 2>&1
     lb config >> "$LOG_PATH/build_iso.log" 2>&1
     # Update user + password in hook
     sed -i \
         -e "s/^USERNAME=.*/USERNAME=\"$LIVE_USER\"/" \
         -e "s/^PASSWORD=.*/PASSWORD=\"$LIVE_PASSWORD\"/" \
-        config/hooks/normal/1001-create-user.hook.chroot >> "$LOG_PATH/build_iso.log" 2>&1
+        $HOME_DIR/config/hooks/normal/1001-create-user.hook.chroot >> "$LOG_PATH/build_iso.log" 2>&1
     # Build the iso image
     lb build >> "$LOG_PATH/build_iso.log" 2>&1
 }
@@ -206,7 +207,6 @@ clean() {
 	rm -r "$BUILD_DIR" || true
 	rm -r "$HOME_DIR/logs/"* || true
 	rm -r "$HOME_DIR/tmp" || true
-	rm "$HOME_DIR/config/includes.binary/live/initramfs-mini.img" || true
 	rm "$HOME_DIR/custom-scripts/functions.sh" || true
         rm "$HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh" || true
 	echo "Done"
@@ -272,11 +272,11 @@ case "$1" in
            echo "Chroot not found, building..."
            build_chroot
         fi
-        build_initramfs
+        #build_initramfs
         ;;
     build)
         build_chroot
-        build_initramfs
+        #build_initramfs
         build_iso
 	build_img
         ;;

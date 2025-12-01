@@ -11,6 +11,7 @@ d|./usr/sbin|
 d|./usr/bin|
 f|./bin/busybox|
 f|./usr/sbin/pcscd|
+f|./usr/sbin/unmkinitramfs|
 f|./usr/bin/gpg|
 f|./usr/bin/gpg-agent|
 f|./usr/bin/gpg-card|
@@ -99,6 +100,10 @@ d|./lib/modules/@KERNEL@/kernel/lib/crc|
 f|./lib/modules/@KERNEL@/kernel/lib/crc/crc-itu-t.ko.xz|
 f|./lib/modules/@KERNEL@/kernel/lib/crc/crc8.ko.xz|
 f|./lib/modules/@KERNEL@/kernel/lib/crc/crc16.ko.xz|
+d|./lib/modules/@KERNEL@/kernel/drivers/block|
+f|./lib/modules/@KERNEL@/kernel/drivers/block/loop.ko.xz|
+d|./lib/modules/@KERNEL@/kernel/drivers/cdrom|
+f|./lib/modules/@KERNEL@/kernel/drivers/cdrom/cdrom.ko.xz|
 d|./lib/modules/@KERNEL@/kernel/crypto|
 f|./lib/modules/@KERNEL@/kernel/crypto/cast5_generic.ko.xz|
 f|./lib/modules/@KERNEL@/kernel/crypto/algif_hash.ko.xz|

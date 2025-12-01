@@ -1,0 +1,11 @@
+#!/bin/bash
+
+$HOME_DIR="../$(pwd)"
+$BINARY_DIR="$(pwd)"
+$INITRAMFS_DIR="$HOME_DIR/initramfs-enc/etc"
+
+#
+# Building sha512sum file for all contents
+#
+find . -type f -exec sha512sum {} \; > "$INITRAMFS_DIR/SHA512SUMS.txt"
+

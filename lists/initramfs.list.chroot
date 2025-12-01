@@ -17,3 +17,4 @@ pcscd
 libpcsclite1
 openssl
 initramfs-tools
+scdaemon

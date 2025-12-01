@@ -10,7 +10,7 @@ BINARY_DIR="$(pwd)"
 [ -f "$HOME_DIR/make_image.cfg" ] || { echo "Config file not found in $HOME_DIR!"; exit 1; }
 . "$HOME_DIR/make_image.cfg"
 
-CHROOT="$HOME_DIR/chroot"
+CHROOT="$HOME_DIR/tmp/chroot"
 TEMPLATE_FILE="$HOME_DIR/initramfs_template.txt"
 BUILD_DIR="$HOME_DIR/initramfs_mini"
 CUSTOM_SCRIPTS_DIR="$HOME_DIR/custom-scripts"

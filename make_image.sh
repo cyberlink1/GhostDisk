@@ -207,6 +207,7 @@ clean() {
 	rm -r "$BUILD_DIR" || true
 	rm -r "$HOME_DIR/logs/"* || true
 	rm -r "$HOME_DIR/tmp" || true
+	rm -r "$HOME_DIR/initramfs_enc" || true
 	rm "$HOME_DIR/custom-scripts/functions.sh" || true
         rm "$HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh" || true
 	echo "Done"

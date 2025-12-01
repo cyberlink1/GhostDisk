@@ -1,0 +1,203 @@
+================================================================================
+                      CUSTOM SCRIPTS OVERVIEW
+================================================================================
+
+This document provides a structured overview of the custom scripts used by the
+initramfs_mini environment. Together, these scripts provide an interactive
+menu-driven system for managing encrypted persistent storage, performing backup
+and restore operations, and administering LUKS volumes.
+
+All subscripts described here are stored in:
+
+    /sbin/menu
+
+and are invoked via the main "Menu" script.
+
+================================================================================
+1. MAIN MENU SYSTEM
+================================================================================
+
+Menu
+----
+The primary control script. It presents the dialog-based menu interface and
+invokes the subscripts located in /sbin/menu. All user interactions within the
+initramfs_mini environment originate here.
+
+================================================================================
+2. BACKUP & RESTORE UTILITIES
+================================================================================
+
+initialize_backup_volume
+------------------------
+Identifies a backup LUKS partition selected by the user, extracts its UUID, and
+stores this value in a `.backup` file located in persistent storage. This UUID
+is later used by the restore utilities to locate available backup archives.
+
+backup_persistent_storage
+-------------------------
+Reads the persistent storage `.backup` configuration to determine the UUID of
+the backup volume. It scans that volume for available backups, presents a list
+to the user, and restores the selected backup to the persistent storage device.
+
+view_backup_contents
+--------------------
+Uses the UUID stored in `.backup` to locate backup archives. Allows the user to
+select one backup file and view its contents without restoring it.
+
+restore_persistent_storage
+--------------------------
+Reads the `.backup` file to identify the backup source volume, lists available
+backups, and restores the entire backup to the persistent storage device.
+
+restore_backup_file
+-------------------
+Similar to full restore, but interactive at the file level. After reading the
+`.backup` file and locating the backup volume, the script lists available backup
+archives, displays the contents of the chosen archive, and allows selective
+restoration of individual files.
+
+================================================================================
+3. LUKS MANAGEMENT TOOLS
+================================================================================
+
+destroy_luks_header
+-------------------
+Uses `cryptsetup luksErase` to destroy the LUKS header and keys of the selected
+persistent storage device. This operation renders the encrypted data permanently
+unrecoverable.
+
+luks_add_key
+------------
+Adds an additional key to the selected LUKS device.
+
+open_luks_volume
+----------------
+Opens and mounts a LUKS-encrypted volume.
+
+status_luks_volume
+------------------
+Retrieves and displays status information about a LUKS volume.
+
+change_key
+----------
+Changes a LUKS password in a safe, atomic workflow:
+1. Adds the new key.
+2. Verifies the new key is functional.
+3. Removes the old key.
+
+format_open_luks_volume
+-----------------------
+Formats an already-opened LUKS volume using the ext3 filesystem.
+
+luks_delete_key
+---------------
+Allows the user to select a LUKS key slot and delete it.
+
+umount_partition
+----------------
+Prompts the user to choose a mounted volume. The script unmounts the filesystem
+and, if the volume is LUKS-backed, closes the encrypted mapping as well.
+
+clear_all_storage
+-----------------
+Automatically unmounts all non-system filesystems and closes any open LUKS
+volumes. Useful before shutdown, reconfiguration, or destructive operations.
+
+mount_partition
+---------------
+Allows the user to select a partition, unlocks the LUKS volume if required, and
+mounts it under /mnt.
+
+repair_luks_volume
+------------------
+Uses `cryptsetup` recovery functions to attempt repair of a damaged LUKS header.
+
+close_luks_volume
+-----------------
+Allows selection of an open LUKS volume and closes/locks it.
+
+wipe_disk
+---------
+Prompts for a disk device and overwrites the entire disk using:
+
+    dd if=/dev/zero of=<disk>
+
+This destroys all data and partitions on the disk.
+
+create_luks_volume
+------------------
+Allows the user to select a disk and initializes a fresh LUKS container using a
+password provided interactively.
+
+luks_list_keys
+--------------
+Displays all LUKS key slots on a selected LUKS volume and allows the user to
+inspect them.
+
+mkluks
+------
+Initializes encrypted persistent storage on the system’s boot device. This tool:
+
+1. Identifies the correct target partition using the UUID embedded at image
+   build time.
+2. Expands the partition to fill all remaining free space on the device.
+3. Creates a new LUKS volume and sets the user’s chosen password.
+4. Installs the initial `.cl.cfg` configuration file, which controls linking
+   between the amnestic home directory and the encrypted persistent storage.
+
+open_cfdisk
+-----------
+Runs the `cfdisk` TUI partition editor, allowing creation, deletion, and
+modification of partitions.
+
+================================================================================
+4. TEMPLATE FILES
+================================================================================
+
+functions.sh.template
+---------------------
+Used by `make_image.sh` to generate `functions.sh` within the initramfs_mini
+build. `make_image.sh` injects the persistent storage UUID so that functions
+can consistently identify the correct storage device.
+
+luks-detect.sh.template
+-----------------------
+A boot-time detection script used by the main OS. During image creation,
+`make_image.sh` injects the persistent-storage UUID. At system startup, this
+ensures the encrypted persistent volume is recognized and mounted at:
+
+    ~/Encrypted
+
+once unlocked by the user.
+
+================================================================================
+5. OTHER ESSENTIAL SCRIPTS & FILES
+================================================================================
+
+init
+----
+The main init script for the initramfs_mini environment. Called early during
+boot to set up the menu system and runtime environment.
+
+nuke
+----
+A destructive utility invoked by GRUB. It overwrites the LUKS header of the
+persistent storage using:
+
+    dd if=/dev/random
+
+This permanently destroys the encryption keys, making the volume unrecoverable.
+
+motd
+----
+The Message-of-the-Day displayed in the initramfs_mini environment.
+
+pwcheck
+-------
+The authentication program used to verify the root password before granting
+access to the menu system.
+
+================================================================================
+END OF DOCUMENT
+================================================================================
+

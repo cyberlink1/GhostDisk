@@ -40,6 +40,7 @@ build_initramfs() {
            | grep -E '^[0-9]' | head -n 1)
     echo "Generating unique random UUID for partition identification"
     PART_2_UUID="$(generate_uuid)"
+    echo "PART_2_UUID=$PART_2_UUID" > /tmp/uuid
     echo "Creating initramfs_mini"
     rm -rf "$BUILD_DIR" > "$LOG_PATH/build_initramfs.log" 2>&1
     sleep 1
@@ -99,7 +100,7 @@ build_initramfs() {
     chroot "$BUILD_DIR" /bin/depmod -b / "$KVER" >> "$LOG_PATH/build_initramfs.log" 2>&1
 
     cd "$BUILD_DIR" >> "$LOG_PATH/build_initramfs.log" 2>&1
-    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initramfs.log" | gzip -9 > "$BUILD_DIR/initramfs-mini.img"
+    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initramfs.log" | gzip -9 > "initramfs-mini.img"
 
     mv "$BUILD_DIR/initramfs-mini.img" "$BINARY_DIR/live/" >> "$LOG_PATH/build_initramfs.log" 2>&1
 

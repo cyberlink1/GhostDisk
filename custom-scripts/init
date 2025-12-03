@@ -15,7 +15,7 @@ mount -t tmpfs tmpfs /run
 # Load modules
 #
 # Minimal storage module list
-for m in libata ahci nvme-core nvme scsi_mod sd_mod sg xhci-pci xhci-hcd ehci-pci ehci-hcd ohci-pci ohci-hcd uas mmc_core mmc_block sdhci sdhci-pci usb-storage dm-mod dm-crypt essiv xts mbcache jbd2 ext4; do
+for m in libata ahci nvme-core nvme scsi_mod sd_mod sg xhci-pci xhci-hcd ehci-pci ehci-hcd ohci-pci ohci-hcd uas mmc_core mmc_block sdhci sdhci-pci usb-storage dm-mod dm-crypt essiv xts mbcache isofs jbd2 ext4; do
     modprobe "$m" || true
 done
 

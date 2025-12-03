@@ -5,7 +5,7 @@
 #
 HOME_DIR=".."
 BINARY_DIR="$(pwd)"
-
+. /tmp/uuid
 # Load the config
 [ -f "$HOME_DIR/make_image.cfg" ] || { echo "Config file not found in $HOME_DIR!"; exit 1; }
 . "$HOME_DIR/make_image.cfg"
@@ -38,20 +38,11 @@ build_initramfs() {
     echo "Collecting Kernel Version"
     KVER=$(find "$HOME_DIR/tmp/chroot/lib/modules" -maxdepth 1 -type d -printf "%f\n" \
            | grep -E '^[0-9]' | head -n 1)
-#    echo "Generating unique random UUID for partition identification"
-#    PART_2_UUID="$(generate_uuid)"
     echo "Creating initramfs_enc"
     rm -rf "$BUILD_DIR" > "$LOG_PATH/build_initramfs-enc.log" 2>&1
     sleep 1
     mkdir -p "$BUILD_DIR" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
 
-    #
-    # change script to handle UUID identification
-    # 
-    #echo "Updating script with UUID of drive for this build" >> "$LOG_PATH/build_initramfs-enc.log"
-    #sed "s/@@UUID@@/$PART_2_UUID/" $HOME_DIR/custom-scripts/functions.sh.template > $HOME_DIR/custom-scripts/functions.sh
-    #sed "s/@@UUID@@/$PART_2_UUID/" $HOME_DIR/custom-scripts/luks-detect.sh.template > $HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh
-    #chmod +x $HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh
    #
    # Build the initramfs-mini from the initramfs-template.txt
    #
@@ -85,10 +76,6 @@ build_initramfs() {
     echo "root:$ROOT_HASH:0:0:root:/root:/bin/sh" > "$BUILD_DIR/etc/passwd"
     echo "root:x:0:" > "$BUILD_DIR/etc/group"
 
-    #echo "export TERM=linux" >> "$BUILD_DIR/etc/profile"
-    #echo "[ -f /etc/issue ] && cat /etc/issue" >> "$BUILD_DIR/etc/profile"
-    #echo "[ -f /etc/motd ] && cat /etc/motd" >> "$BUILD_DIR/etc/profile"
-
     echo "" > "$BUILD_DIR/etc/fstab"
 
     chmod +x "$BUILD_DIR/init"
@@ -101,11 +88,20 @@ build_initramfs() {
     #
     # Build checksums of /boot
     #
-    find . -type f -print0 | xargs -0 sha512sum > "$BUILD_DIR/etc/checksums.txt" 2>/dev/null || true >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    #find . -type f -print0 | xargs -0 sha512sum > "$BUILD_DIR/etc/checksums.txt" 2>/dev/null || true >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    find . -type f \
+    ! -name isolinux.bin \
+    -print0 | xargs -0 sha512sum > "$BUILD_DIR/etc/checksums.txt"
 
+    #
+    # change script to handle UUID identification
+    # 
+    echo "Updating script with UUID ($PART_2_UUID) of drive for this build" >> "$LOG_PATH/build_initramfs-enc.log"
+    sed "s/@@UUID@@/$PART_2_UUID/" $HOME_DIR/custom-scripts/init-enc.template > "$BUILD_DIR/init"
+    chmod +x "$BUILD_DIR/init"
 
     cd "$BUILD_DIR" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
-    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initramfs-enc.log" | gzip -9 > "$BUILD_DIR/initramfs-enc.img"
+    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initramfs-enc.log" | gzip -9 > "initramfs-enc.img"
 
     mv "$BUILD_DIR/initramfs-enc.img" "$BINARY_DIR/live/" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
 
@@ -114,3 +110,4 @@ build_initramfs() {
 }
 
 build_initramfs
+rm /tmp/uuid

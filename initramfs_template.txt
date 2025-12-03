@@ -434,6 +434,11 @@ f|./lib/modules/@KERNEL@/kernel/fs/squashfs/squashfs.ko.xz|
 d|./lib/modules/@KERNEL@/kernel/fs/cachefiles|
 f|./lib/modules/@KERNEL@/kernel/fs/cachefiles/cachefiles.ko.xz|
 d|./lib/modules/@KERNEL@/kernel/drivers|
+
+d|./lib/modules/@KERNEL@/kernel/drivers/block|
+f|./lib/modules/@KERNEL@/kernel/drivers/block/virtio_blk.ko.xz|
+d|./lib/modules/@KERNEL@/kernel/drivers/cdrom|
+f|./lib/modules/@KERNEL@/kernel/drivers/cdrom/cdrom.ko.xz|
 d|./lib/modules/@KERNEL@/kernel/drivers/md|
 f|./lib/modules/@KERNEL@/kernel/drivers/md/dm-crypt.ko.xz|
 f|./lib/modules/@KERNEL@/kernel/drivers/md/dm-zoned.ko.xz|

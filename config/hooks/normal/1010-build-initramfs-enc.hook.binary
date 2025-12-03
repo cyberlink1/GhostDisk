@@ -84,6 +84,7 @@ build_initramfs() {
     echo "Initramfs recreated at $HOME_DIR/initramfs_enc"
     echo "Building initramfs_enc image"
     chroot "$BUILD_DIR" /bin/busybox --install /bin >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    chroot "$BUILD_DIR" rm /bin/cpio >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
     chroot "$BUILD_DIR" /bin/depmod -b / "$KVER" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
     #
     # Build checksums of /boot
@@ -101,9 +102,9 @@ build_initramfs() {
     chmod +x "$BUILD_DIR/init"
 
     cd "$BUILD_DIR" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
-    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initramfs-enc.log" | gzip -9 > "initramfs-enc.img"
+    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initramfs-enc.log" | gzip -9 > "$BINARY_DIR/live/initramfs-enc.img"
 
-    mv "$BUILD_DIR/initramfs-enc.img" "$BINARY_DIR/live/" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    #mv "$BUILD_DIR/initramfs-enc.img" "$BINARY_DIR/live/" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
 
     cd "$HOME_DIR" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
     #rm -r "$HOME_DIR/tmp"

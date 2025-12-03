@@ -99,7 +99,7 @@ done
 #
 if [ -z "$TARGET" ]; then
     echo "No TARGET specified. Dropping to shell."
-    exec getty -nl /bin/sh 0 /dev/console
+    exec getty -nl /bin/bash 0 /dev/console
 fi
 
 #

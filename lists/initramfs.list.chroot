@@ -18,3 +18,5 @@ libpcsclite1
 openssl
 initramfs-tools
 scdaemon
+cpio
+kexec-tools

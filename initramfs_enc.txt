@@ -10,6 +10,8 @@ d|./etc|
 d|./usr|
 d|./usr/sbin|
 d|./usr/bin|
+f|./bin/bash|
+f|./usr/bin/cpio|
 f|./bin/busybox|
 f|./usr/sbin/pcscd|
 f|./usr/bin/unmkinitramfs|
@@ -20,6 +22,10 @@ f|./usr/bin/gpgconf|
 f|./usr/bin/gnupg-pkcs11-scd|
 f|./usr/bin/openssl|
 f|./sbin/sgdisk|
+f|./usr/sbin/kexec|
+f|./etc/default/kexec|
+f|./etc/default/kexec.d|
+f|./usr/sbin/kexec-load-kernel|
 #
 # Libraries needed
 #
@@ -27,6 +33,36 @@ d|./lib|
 d|./lib/x86_64-linux-gnu|
 f|./lib/x86_64-linux-gnu/libstdc++.so.6.0.34|
 l|./lib/x86_64-linux-gnu/libstdc++.so.6|libstdc++.so.6.0.34
+# kexec libs
+f|./usr/lib/x86_64-linux-gnu/libxencall.so.1.3
+l|./usr/lib/x86_64-linux-gnu/libxencall.so.1|libxencall.so.1.3
+f|./usr/lib/x86_64-linux-gnu/libxenctrl.so.4.20.0
+l|./usr/lib/x86_64-linux-gnu/libxenctrl.so.4.20|libxenctrl.so.4.20.0
+f|./usr/lib/x86_64-linux-gnu/libxendevicemodel.so.1.4
+l|./usr/lib/x86_64-linux-gnu/libxendevicemodel.so.1|libxendevicemodel.so.1.4
+f|./usr/lib/x86_64-linux-gnu/libxenevtchn.so.1.2
+l|./usr/lib/x86_64-linux-gnu/libxenevtchn.so.1|libxenevtchn.so.1.2
+f|./usr/lib/x86_64-linux-gnu/libxenforeignmemory.so.1.4
+l|./usr/lib/x86_64-linux-gnu/libxenforeignmemory.so.1|libxenforeignmemory.so.1.4
+f|./usr/lib/x86_64-linux-gnu/libxengnttab.so.1.2
+l|./usr/lib/x86_64-linux-gnu/libxengnttab.so.1|libxengnttab.so.1.2
+f|./usr/lib/x86_64-linux-gnu/libxenguest.so.4.20.0
+l|./usr/lib/x86_64-linux-gnu/libxenguest.so.4.20|libxenguest.so.4.20.0
+f|./usr/lib/x86_64-linux-gnu/libxenhypfs.so.1.0
+l|./usr/lib/x86_64-linux-gnu/libxenhypfs.so.1|libxenhypfs.so.1.0
+f|./usr/lib/x86_64-linux-gnu/libxenlight.so.4.20.0
+l|./usr/lib/x86_64-linux-gnu/libxenlight.so.4.20|libxenlight.so.4.20.0
+f|./usr/lib/x86_64-linux-gnu/libxenstat.so.4.20.0
+l|./usr/lib/x86_64-linux-gnu/libxenstat.so.4.20|libxenstat.so.4.20.0
+f|./usr/lib/x86_64-linux-gnu/libxenstore.so.4.0
+l|./usr/lib/x86_64-linux-gnu/libxenstore.so.4|libxenstore.so.4.0
+f|./usr/lib/x86_64-linux-gnu/libxentoolcore.so.1.0
+l|./usr/lib/x86_64-linux-gnu/libxentoolcore.so.1|libxentoolcore.so.1.0
+f|./usr/lib/x86_64-linux-gnu/libxentoollog.so.1.0
+l|./usr/lib/x86_64-linux-gnu/libxentoollog.so.1|libxentoollog.so.1.0
+f|./usr/lib/x86_64-linux-gnu/libxenvchan.so.4.20.0
+l|./usr/lib/x86_64-linux-gnu/libxenvchan.so.4.20|libxenvchan.so.4.20.0
+#
 f|./lib/x86_64-linux-gnu/libm.so.6|
 f|./lib/x86_64-linux-gnu/libgcc_s.so.1|
 f|./lib/x86_64-linux-gnu/libssl.so.3
@@ -555,7 +591,6 @@ l|./bin/ar|busybox
 l|./bin/route|busybox
 l|./bin/sulogin|busybox
 l|./bin/fdisk|busybox
-l|./bin/cpio|busybox
 l|./bin/rm|busybox
 l|./bin/setkeycodes|busybox
 l|./bin/echo|busybox

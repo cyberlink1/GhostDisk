@@ -13,11 +13,9 @@ fi
 
 HOME_DIR=$(pwd)
 CHROOT="$HOME_DIR/chroot"
-TEMPLATE_FILE="$HOME_DIR/initramfs_template.txt"
 BUILD_DIR="$HOME_DIR/initramfs_mini"
-CUSTOM_SCRIPTS_DIR="$HOME_DIR/custom-scripts"
 LOG_PATH="$HOME_DIR/logs"
-LISTS_SRC="$HOME_DIR/lists"
+LISTS_SRC="$HOME_DIR/GhostDisk/lists"
 LISTS_DST="$HOME_DIR/config/package-lists"
 
 mkdir -p "$LOG_PATH"
@@ -54,6 +52,15 @@ build_iso() {
             cp -f "$LISTS_SRC/$f" "$LISTS_DST/" >> "$LOG_PATH/build_iso.log" 2>&1
         fi
     done
+    #
+    # Generate random UUID to identify the persistent storage later
+    #
+    PART_2_UUID="$(generate_uuid)"
+    echo "PART_2_UUID=$PART_2_UUID" > /tmp/uuid
+ #
+ # Add the uuid to the luks-detect script
+ #
+ sed "s/@@UUID@@/$PART_2_UUID/" $HOME_DIR/GhostDisk/custom-scripts/luks-detect.sh.template > $HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh
 
 #
 # Enable auto-rotate if it is set true in the config
@@ -62,13 +69,13 @@ build_iso() {
     if [ "$AUTO_ROTATE" = "true" ]; then
         echo "Enabling auto-rotate…"
 
-        cp "$HOME_DIR/auto-rotate/rotate.list.chroot" \
+        cp "$HOME_DIR/GhostDisk/auto-rotate/rotate.list.chroot" \
            "$HOME_DIR/config/package-lists/rotate.list.chroot"
 
-        cp "$HOME_DIR/auto-rotate/auto-rotate.desktop" \
+        cp "$HOME_DIR/GhostDisk/auto-rotate/auto-rotate.desktop" \
            "$HOME_DIR/config/includes.chroot/etc/xdg/autostart/auto-rotate.desktop"
 
-        cp "$HOME_DIR/auto-rotate/auto-rotate.sh" \
+        cp "$HOME_DIR/GhostDisk/auto-rotate/auto-rotate.sh" \
            "$HOME_DIR/config/includes.chroot/usr/local/bin/auto-rotate.sh"
     else
         echo "Disabling auto-rotate…"
@@ -134,8 +141,9 @@ clean() {
 	rm -r "$BUILD_DIR" || true
 	rm -r "$HOME_DIR/logs/"* || true
 	rm -r "$HOME_DIR/tmp" || true
-	rm -r "$HOME_DIR/initramfs_enc" || true
-	rm "$HOME_DIR/custom-scripts/functions.sh" || true
+	rm -r "$HOME_DIR/securerd-init" || true
+	rm -r "/tmp/uuid" || true
+	rm "$HOME_DIR/initrd-menu/custom-scripts/functions.sh" || true
         rm "$HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh" || true
 	echo "Done"
 }

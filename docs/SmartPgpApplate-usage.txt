@@ -1,0 +1,73 @@
+============================================================
+       SETUP AND MANAGE KEYS ON SmartPGPApplet
+============================================================
+
+Step 1: Ensure the card is recognized
+------------------------------------------------------------
+# Check if the card is connected and recognized
+gpg --card-status
+
+# You should see something like:
+# Name, Serial Number, Card type: SmartPGPApplet
+# Key slots (Signature, Encryption, Authentication)
+
+Step 2: Generate keys directly on the card
+------------------------------------------------------------
+# Generate a key for the card
+gpg --card-edit
+
+# Enter the GPG card interface:
+# > admin   (enter admin mode, may require default PIN)
+# > generate
+# Follow the prompts to generate keys on the card:
+#   - Key type (RSA recommended)
+#   - Key size (e.g., 4096 bits)
+#   - Expiration date
+#   - Name, email
+#   - PIN for protecting private keys on the card
+
+# After completion, the card holds the private keys internally.
+
+Step 3: Check the keys on the card
+------------------------------------------------------------
+# Back in the shell, list the keys:
+gpg --card-status
+
+# You should see the key fingerprints for:
+# - Signature
+# - Encryption
+# - Authentication
+
+Step 4: Configure GPG to use the card keys
+------------------------------------------------------------
+# Restart gpg-agent to make sure it recognizes the card
+gpgconf --kill gpg-agent
+gpgconf --launch gpg-agent
+
+# Test signing
+echo "Hello world" | gpg --sign --armor
+
+# Test encryption
+gpg --encrypt --recipient <your-email> test.txt
+
+Step 5: Backup your public keys (optional)
+------------------------------------------------------------
+# Export the public keys for sharing
+gpg --armor --export <your-email> > mykey.pub
+
+# Private keys never leave the card; only the public key is exportable
+
+Step 6: Manage card PINs and admin
+------------------------------------------------------------
+# Enter card-edit mode for PIN management
+gpg --card-edit
+
+# Common commands:
+# > passwd     (change user PIN)
+# > admin      (enter admin mode to change admin PIN or reset keys)
+# > help       (list commands)
+
+============================================================
+        KEYS ARE NOW SET UP DIRECTLY ON SmartPGPApplet
+============================================================
+

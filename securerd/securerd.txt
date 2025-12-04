@@ -23,8 +23,8 @@ f|./usr/bin/gnupg-pkcs11-scd|
 f|./usr/bin/openssl|
 f|./sbin/sgdisk|
 f|./usr/sbin/kexec|
-f|./etc/default/kexec|
-f|./etc/default/kexec.d|
+d|./etc/default/kexec|
+d|./etc/default/kexec.d|
 f|./usr/sbin/kexec-load-kernel|
 #
 # Libraries needed

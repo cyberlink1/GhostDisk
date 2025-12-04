@@ -11,13 +11,18 @@ BINARY_DIR="$(pwd)"
 . "$HOME_DIR/make_image.cfg"
 
 CHROOT="$HOME_DIR/tmp/chroot"
-TEMPLATE_FILE="$HOME_DIR/initramfs_template.txt"
+TEMPLATE_FILE="$HOME_DIR/initrd-menu/initrd-menu.txt"
 BUILD_DIR="$HOME_DIR/initramfs_mini"
-CUSTOM_SCRIPTS_DIR="$HOME_DIR/custom-scripts"
+CUSTOM_SCRIPTS_DIR="$HOME_DIR/initrd-menu/custom-scripts"
 LOG_PATH="$HOME_DIR/logs"
 LISTS_SRC="$HOME_DIR/lists"
 LISTS_DST="$HOME_DIR/config/package-lists"
-
+if [ ! -f /tmp/uuid ]; then
+    echo "/tmp/uuid not found" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
+    exit 1
+else
+   . /tmp/uuid
+fi
 
 generate_uuid() {
     # Generates a random UUID
@@ -42,17 +47,15 @@ build_initramfs() {
     PART_2_UUID="$(generate_uuid)"
     echo "PART_2_UUID=$PART_2_UUID" > /tmp/uuid
     echo "Creating initramfs_mini"
-    rm -rf "$BUILD_DIR" > "$LOG_PATH/build_initramfs.log" 2>&1
+    rm -rf "$BUILD_DIR" > "$LOG_PATH/build_initrd-menu.log" 2>&1
     sleep 1
-    mkdir -p "$BUILD_DIR" >> "$LOG_PATH/build_initramfs.log" 2>&1
+    mkdir -p "$BUILD_DIR" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
 
     #
     # change script to handle UUID identification
     # 
-    echo "Updating script with UUID of drive for this build" >> "$LOG_PATH/build_initramfs.log"
-    sed "s/@@UUID@@/$PART_2_UUID/" $HOME_DIR/custom-scripts/functions.sh.template > $HOME_DIR/custom-scripts/functions.sh
-    sed "s/@@UUID@@/$PART_2_UUID/" $HOME_DIR/custom-scripts/luks-detect.sh.template > $HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh
-    chmod +x $HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh
+    echo "Updating script with UUID of drive for this build" >> "$LOG_PATH/build_initrd-menu.log"
+    sed "s/@@UUID@@/$PART_2_UUID/" $CUSTOM_SCRIPTS_DIR/functions.sh.template > $CUSTOM_SCRIPTS_DIR/functions.sh
    #
    # Build the initramfs-mini from the initramfs-template.txt
    #
@@ -63,24 +66,24 @@ build_initramfs() {
 
         case "$type" in
             d)
-                mkdir -p "$dest" >> "$LOG_PATH/build_initramfs.log" 2>&1
+                mkdir -p "$dest" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
                 ;;
             f)
-                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_initramfs.log" 2>&1
-                cp -L "$HOME_DIR/tmp/chroot/$path" "$dest" >> "$LOG_PATH/build_initramfs.log" 2>&1
+                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
+                cp -L "$HOME_DIR/tmp/chroot/$path" "$dest" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
                 ;;
             s)
-                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_initramfs.log" 2>&1
-                cp -L "$CUSTOM_SCRIPTS_DIR/$(basename "$path")" "$dest" >> "$LOG_PATH/build_initramfs.log" 2>&1
+                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
+                cp -L "$CUSTOM_SCRIPTS_DIR/$(basename "$path")" "$dest" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
                 ;;
             l)
-                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_initramfs.log" 2>&1
-                ln -s "$target" "$dest" >> "$LOG_PATH/build_initramfs.log" 2>&1
+                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
+                ln -s "$target" "$dest" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
                 ;;
         esac
     done < "$TEMPLATE_FILE"
 
-    mkdir -p "$BUILD_DIR"/{dev,proc,sys,tmp} >> "$LOG_PATH/build_initramfs.log" 2>&1
+    mkdir -p "$BUILD_DIR"/{dev,proc,sys,tmp} >> "$LOG_PATH/build_initrd-menu.log" 2>&1
     
     ROOT_HASH=$(openssl passwd -6 "$ROOT_PASSWORD")
     echo "root:$ROOT_HASH:0:0:root:/root:/bin/sh" > "$BUILD_DIR/etc/passwd"
@@ -93,18 +96,18 @@ build_initramfs() {
     echo "" > "$BUILD_DIR/etc/fstab"
 
     chmod +x "$BUILD_DIR/init"
-    find "$BUILD_DIR/bin" "$BUILD_DIR/sbin" -type f -exec chmod +x {} \; 2>/dev/null || true >> "$LOG_PATH/build_initramfs.log" 2>&1
+    find "$BUILD_DIR/bin" "$BUILD_DIR/sbin" -type f -exec chmod +x {} \; 2>/dev/null || true >> "$LOG_PATH/build_initrd-menu.log" 2>&1
 
     echo "Initramfs recreated at $HOME_DIR/initramfs_mini"
     echo "Building initramfs image"
-    chroot "$BUILD_DIR" /bin/depmod -b / "$KVER" >> "$LOG_PATH/build_initramfs.log" 2>&1
+    chroot "$BUILD_DIR" /bin/depmod -b / "$KVER" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
 
-    cd "$BUILD_DIR" >> "$LOG_PATH/build_initramfs.log" 2>&1
-    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initramfs.log" | gzip -9 > "$BINARY_DIR/live/initramfs-mini.img"
+    cd "$BUILD_DIR" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
+    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initrd-menu.log" | gzip -9 > "$BINARY_DIR/live/initrd-menu.img"
 
-    #mv "$BUILD_DIR/initramfs-mini.img" "$BINARY_DIR/live/" >> "$LOG_PATH/build_initramfs.log" 2>&1
+    #mv "$BUILD_DIR/initramfs-mini.img" "$BINARY_DIR/live/" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
 
-    cd "$HOME_DIR" >> "$LOG_PATH/build_initramfs.log" 2>&1
+    cd "$HOME_DIR" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
     #rm -r "$HOME_DIR/tmp"
 }
 

@@ -5,20 +5,26 @@
 #
 HOME_DIR=".."
 BINARY_DIR="$(pwd)"
-. /tmp/uuid
+
 # Load the config
 [ -f "$HOME_DIR/make_image.cfg" ] || { echo "Config file not found in $HOME_DIR!"; exit 1; }
 . "$HOME_DIR/make_image.cfg"
 
 CHROOT="$HOME_DIR/tmp/chroot"
-TEMPLATE_FILE="$HOME_DIR/initramfs_enc.txt"
-BUILD_DIR="$HOME_DIR/initramfs_enc"
-CUSTOM_SCRIPTS_DIR="$HOME_DIR/custom-scripts"
+TEMPLATE_FILE="$HOME_DIR/securerd/securerd.txt"
+BUILD_DIR="$HOME_DIR/securerd-init"
+CUSTOM_SCRIPTS_DIR="$HOME_DIR/securerd/custom-scripts"
 LOG_PATH="$HOME_DIR/logs"
 LISTS_SRC="$HOME_DIR/lists"
 LISTS_DST="$HOME_DIR/config/package-lists"
 
 
+if [ ! -f /tmp/uuid ]; then
+    echo "/tmp/uuid not found" >> "$LOG_PATH/build_securerd.log" 2>&1
+    exit 1
+else
+   . /tmp/uuid
+fi
 generate_uuid() {
     # Generates a random UUID
     if command -v uuidgen >/dev/null 2>&1; then
@@ -39,9 +45,9 @@ build_initramfs() {
     KVER=$(find "$HOME_DIR/tmp/chroot/lib/modules" -maxdepth 1 -type d -printf "%f\n" \
            | grep -E '^[0-9]' | head -n 1)
     echo "Creating initramfs_enc"
-    rm -rf "$BUILD_DIR" > "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    rm -rf "$BUILD_DIR" > "$LOG_PATH/build_securerd.log" 2>&1
     sleep 1
-    mkdir -p "$BUILD_DIR" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    mkdir -p "$BUILD_DIR" >> "$LOG_PATH/build_securerd.log" 2>&1
 
    #
    # Build the initramfs-mini from the initramfs-template.txt
@@ -53,24 +59,24 @@ build_initramfs() {
 
         case "$type" in
             d)
-                mkdir -p "$dest" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+                mkdir -p "$dest" >> "$LOG_PATH/build_securerd.log" 2>&1
                 ;;
             f)
-                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
-                cp -L "$HOME_DIR/tmp/chroot/$path" "$dest" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_securerd.log" 2>&1
+                cp -L "$HOME_DIR/tmp/chroot/$path" "$dest" >> "$LOG_PATH/build_securerd.log" 2>&1
                 ;;
             s)
-                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
-                cp -L "$CUSTOM_SCRIPTS_DIR/$(basename "$path")" "$dest" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_securerd.log" 2>&1
+                cp -L "$CUSTOM_SCRIPTS_DIR/$(basename "$path")" "$dest" >> "$LOG_PATH/build_securerd.log" 2>&1
                 ;;
             l)
-                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
-                ln -s "$target" "$dest" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+                mkdir -p "$(dirname "$dest")" >> "$LOG_PATH/build_securerd.log" 2>&1
+                ln -s "$target" "$dest" >> "$LOG_PATH/build_securerd.log" 2>&1
                 ;;
         esac
     done < "$TEMPLATE_FILE"
 
-    mkdir -p "$BUILD_DIR"/{etc,dev,proc,sys,tmp,mnt,run,sbin} >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    mkdir -p "$BUILD_DIR"/{etc,dev,proc,sys,tmp,mnt,run,sbin} >> "$LOG_PATH/build_securerd.log" 2>&1
     
     ROOT_HASH=$(openssl passwd -6 "$ROOT_PASSWORD")
     echo "root:$ROOT_HASH:0:0:root:/root:/bin/sh" > "$BUILD_DIR/etc/passwd"
@@ -79,17 +85,17 @@ build_initramfs() {
     echo "" > "$BUILD_DIR/etc/fstab"
 
     chmod +x "$BUILD_DIR/init"
-    find "$BUILD_DIR/bin" "$BUILD_DIR/sbin" -type f -exec chmod +x {} \; 2>/dev/null || true >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    find "$BUILD_DIR/bin" "$BUILD_DIR/sbin" -type f -exec chmod +x {} \; 2>/dev/null || true >> "$LOG_PATH/build_securerd.log" 2>&1
     
     echo "Initramfs recreated at $HOME_DIR/initramfs_enc"
     echo "Building initramfs_enc image"
-    chroot "$BUILD_DIR" /bin/busybox --install /bin >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
-    chroot "$BUILD_DIR" rm /bin/cpio >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
-    chroot "$BUILD_DIR" /bin/depmod -b / "$KVER" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    chroot "$BUILD_DIR" /bin/busybox --install /bin >> "$LOG_PATH/build_securerd.log" 2>&1
+    chroot "$BUILD_DIR" rm /bin/cpio >> "$LOG_PATH/build_securerd.log" 2>&1
+    chroot "$BUILD_DIR" /bin/depmod -b / "$KVER" >> "$LOG_PATH/build_securerd.log" 2>&1
     #
     # Build checksums of /boot
     #
-    #find . -type f -print0 | xargs -0 sha512sum > "$BUILD_DIR/etc/checksums.txt" 2>/dev/null || true >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    #find . -type f -print0 | xargs -0 sha512sum > "$BUILD_DIR/etc/checksums.txt" 2>/dev/null || true >> "$LOG_PATH/build_securerd.log" 2>&1
     find . -type f \
     ! -name isolinux.bin \
     -print0 | xargs -0 sha512sum > "$BUILD_DIR/etc/checksums.txt"
@@ -97,18 +103,17 @@ build_initramfs() {
     #
     # change script to handle UUID identification
     # 
-    echo "Updating script with UUID ($PART_2_UUID) of drive for this build" >> "$LOG_PATH/build_initramfs-enc.log"
-    sed "s/@@UUID@@/$PART_2_UUID/" $HOME_DIR/custom-scripts/init-enc.template > "$BUILD_DIR/init"
+    echo "Updating script with UUID ($PART_2_UUID) of drive for this build" >> "$LOG_PATH/build_securerd.log"
+    sed "s/@@UUID@@/$PART_2_UUID/" $CUSTOM_SCRIPTS_DIR/init-enc.template > "$BUILD_DIR/init"
     chmod +x "$BUILD_DIR/init"
 
-    cd "$BUILD_DIR" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
-    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initramfs-enc.log" | gzip -9 > "$BINARY_DIR/live/initramfs-enc.img"
+    cd "$BUILD_DIR" >> "$LOG_PATH/build_securerd.log" 2>&1
+    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_securerd.log" | gzip -9 > "$BINARY_DIR/live/securerd.img"
 
-    #mv "$BUILD_DIR/initramfs-enc.img" "$BINARY_DIR/live/" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    #mv "$BUILD_DIR/initramfs-enc.img" "$BINARY_DIR/live/" >> "$LOG_PATH/build_securerd.log" 2>&1
 
-    cd "$HOME_DIR" >> "$LOG_PATH/build_initramfs-enc.log" 2>&1
+    cd "$HOME_DIR" >> "$LOG_PATH/build_securerd.log" 2>&1
     #rm -r "$HOME_DIR/tmp"
 }
 
 build_initramfs
-rm /tmp/uuid

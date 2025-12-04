@@ -1,0 +1,82 @@
+============================================================
+                SETUP GUIDE FOR ACR39U & SmartPGP
+============================================================
+
+Step 1: Install pcscd (Smart Card Daemon)
+------------------------------------------------------------
+# Install pcscd to allow system access to the ACR39U reader
+sudo apt install pcscd
+
+# Start and enable the daemon
+sudo systemctl start pcscd
+sudo systemctl enable pcscd
+
+Step 2: Install Java 11
+------------------------------------------------------------
+# Install OpenJDK 11
+sudo apt install openjdk-11-openjdk
+
+Step 3: Clone Repositories
+------------------------------------------------------------
+# Clone GlobalPlatformPro
+git clone https://github.com/martinpaljak/GlobalPlatformPro
+
+# Clone SmartPGP
+git clone https://github.com/github-af/SmartPGP
+
+# Add JavaCard SDK as a submodule
+cd <SmartPGP-directory>
+git submodule add https://github.com/martinpaljak/oracle_javacard_sdks sdks
+git submodule init
+git submodule update
+
+Step 4: Prepare Environment Variables
+------------------------------------------------------------
+# Set environment variables (replace <location> with actual path)
+export JC_HOME=<location>/javacard_sdk/oracle_javacard_sdks/jc305u4_kit
+export JAVA_HOME=/usr/lib/jvm/java-11-openjdk
+export PATH=$JAVA_HOME/bin:$PATH
+
+# Set GlobalPlatformPro JAR location
+export GP_JAR=<location of GlobalPlatformPro directory>/tool/target/gp.jar
+alias gp="java -jar <location of GlobalPlatformPro directory>/tool/target/gp.jar"
+
+Step 5: Build GlobalPlatformPro
+------------------------------------------------------------
+# Go to the GlobalPlatformPro directory
+cd <location of GlobalPlatformPro directory>
+
+# Compile to produce gp.jar
+make
+
+Step 6: Build SmartPGP Applet
+------------------------------------------------------------
+# Go to SmartPGP directory
+cd <SmartPGP-directory>
+
+# Build SmartPGPApplet.cap
+ant
+
+Step 7: Install SmartPGP Applet on the card
+------------------------------------------------------------
+# List card contents
+gp -list
+
+# Install the applet
+gp -install SmartPGPApplet.cap
+
+Step 8: Restart GPG Agent
+------------------------------------------------------------
+# Restart gpg-agent to recognize the card
+gpgconf --kill gpg-agent
+gpgconf --launch gpg-agent
+
+Step 9: Verify Card Status
+------------------------------------------------------------
+# Check the card status
+gpg --card-status
+
+============================================================
+                   SETUP COMPLETE
+============================================================
+

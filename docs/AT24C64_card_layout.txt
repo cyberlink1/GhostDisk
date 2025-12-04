@@ -1,0 +1,11 @@
++-------------------------------+ <- Address 0x0000
+| Counter (4 bytes)             |  # 32-bit monotonic counter
++-------------------------------+
+| Metadata (4 bytes)            |  # e.g., version, flags, reserved
++-------------------------------+
+| HMAC tag (32 bytes)           |  # HMAC-SHA-256 over counter + encrypted keys
++-------------------------------+
+| Padding / future expansion    |  # ~1.96 KB left
++-------------------------------+
+| Encrypted key blob (~6 KB)    |
++-------------------------------+ <- Address 0x1FFF

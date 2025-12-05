@@ -39,7 +39,10 @@ build_chroot() {
     cd "$HOME_DIR/tmp" >> "$LOG_PATH/build_chroot.log" 2>&1
     lb clean >> "$LOG_PATH/build_chroot.log" 2>&1
     lb config >> "$LOG_PATH/build_chroot.log" 2>&1
-    cp "$HOME_DIR/lists/initramfs.list.chroot" "$HOME_DIR/tmp/config/package-lists/"
+    files=($HOME_DIR/securerd/lists/*.chroot)
+	    [ ${#files[@]} -gt 0 ] && cp "${files[@]}" "$HOME_DIR/tmp/config/package-lists/"
+    files=($HOME_DIR/initrd-menu/lists/*.chroot)
+	    [ ${#files[@]} -gt 0 ] && cp "${files[@]}" "$HOME_DIR/tmp/config/package-lists/"
     lb bootstrap >> "$LOG_PATH/build_chroot.log" 2>&1
     lb chroot >> "$LOG_PATH/build_chroot.log" 2>&1
 }

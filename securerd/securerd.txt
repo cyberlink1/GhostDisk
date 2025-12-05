@@ -134,6 +134,8 @@ f|./usr/lib/pcsc/drivers/ifd-ccid.bundle/Contents/Linux/libccid.so|
 f|./usr/lib/pcsc/drivers/ifd-ccid.bundle/Contents/Info.plist|
 f|./usr/lib/x86_64-linux-gnu/libpcsclite.so.1|
 f|./usr/lib/x86_64-linux-gnu/libpcsclite_real.so.1|
+f|./usr/lib/x86_64-linux-gnu/libcrypt.so.1.1.0|
+l|./usr/lib/x86_64-linux-gnu/libcrypt.so.1|libcrypt.so.1.1.0
 #
 # Kernel Modules needed
 #
@@ -694,3 +696,5 @@ l|./bin/seq|busybox
 l|./bin/init|busybox
 l|./bin/logread|busybox
 l|./bin/date|busybox
+s|./sbin/pwcheck|
+s|./sbin/wipe_ram|

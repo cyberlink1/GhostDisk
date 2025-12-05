@@ -1,0 +1,18 @@
+validate_checksums() {
+    CHECKSUM_FILE="/etc/checksums.txt"
+    [ -f "$CHECKSUM_FILE" ] || exit 1
+    echo "Validating boot environment"
+    cd /boot
+    if sha512sum -c "$CHECKSUM_FILE" > /dev/null; then
+        echo "All files passed checksum verification"
+    else
+        echo "Checksum verification FAILED"
+        echo "Press Enter to continue..."
+        read dummy
+        reboot -f -p
+    fi
+    cd /
+}
+
+validate_checksums
+

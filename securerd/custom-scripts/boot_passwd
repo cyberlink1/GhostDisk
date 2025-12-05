@@ -1,0 +1,26 @@
+fail_count=0
+
+while true; do
+    echo -n "Enter Boot Password: "
+    stty -echo
+    read -r password
+    stty echo
+    echo
+    
+    if pwcheck "$password" "$(grep -m1 ^root /etc/passwd | cut -d: -f2)"; then
+        break
+    fi
+
+    fail_count=$((fail_count + 1))
+    echo "Invalid password ($fail_count/$MAX_FAILED)"
+
+    if [ "$fail_count" -ge "$MAX_FAILED" ]; then
+        if [ "$WIPE_ON_FAIL" = "true" ]; then
+            echo "Maximum attempts reached — wiping persistent storage!"
+            wipe_on_fail
+        fi
+        reboot -f -p
+    fi
+done
+unset password
+

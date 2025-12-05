@@ -84,7 +84,7 @@ build_initramfs() {
 
     echo "" > "$BUILD_DIR/etc/fstab"
 
-    chmod +x "$BUILD_DIR/init"
+
     find "$BUILD_DIR/bin" "$BUILD_DIR/sbin" -type f -exec chmod +x {} \; 2>/dev/null || true >> "$LOG_PATH/build_securerd.log" 2>&1
     
     echo "Initramfs recreated at $HOME_DIR/initramfs_enc"
@@ -104,13 +104,131 @@ build_initramfs() {
     # change script to handle UUID identification
     # 
     echo "Updating script with UUID ($PART_2_UUID) of drive for this build" >> "$LOG_PATH/build_securerd.log"
-    sed "s/@@UUID@@/$PART_2_UUID/" $CUSTOM_SCRIPTS_DIR/init-enc.template > "$BUILD_DIR/init"
-    chmod +x "$BUILD_DIR/init"
+    #sed "s/@@UUID@@/$PART_2_UUID/" $CUSTOM_SCRIPTS_DIR/init-enc.template > "$BUILD_DIR/init"
+    #chmod +x "$BUILD_DIR/init"
+    #
+    # Add user configured options
+    #
+    
+    TEMPLATE="$CUSTOM_SCRIPTS_DIR/init-enc.template"
+    OUTPUT="$BUILD_DIR/init"
+    
+    # Copy template as starting point
+    cp "$TEMPLATE" "$OUTPUT"
 
+    ########################
+    # 1. Replace UUID
+    ########################
+    sed -i "s|@@UUID@@|$PART_2_UUID|" "$OUTPUT"
+
+    ########################
+    # 2. Require boot password
+    ########################
+    if [[ "$UNLOCK_BOOT" == "true" ]]; then
+        BOOT_PASSWD_SCRIPT=$(<$CUSTOM_SCRIPTS_DIR/boot_passwd)
+        awk -v repl="$BOOT_PASSWD_SCRIPT" '{gsub(/@@BOOT_PASSWD@@/, repl)}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+    else
+        awk '{gsub(/@@BOOT_PASSWD@@/, "")}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+    fi
+
+    ########################
+    # 3. Max failed login attempts
+    ########################
+    if [[ -n "$MAX_FAILED" ]]; then
+        MAX_FAIL_SCRIPT=$(<$CUSTOM_SCRIPTS_DIR/max_fail)
+	awk -v v="$MAX_FAILED" '{gsub("@@VAR_MAX_FAIL@@","MAX_FAIL=" v)}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+	if [ "$MAX_FAILED" -gt 0 ]; then
+           SCRIPT=$(<"$CUSTOM_SCRIPTS_DIR/max_failed.sh")
+           awk -v repl="$SCRIPT" '{gsub("@@SCRIPT_MAX_FAIL@@", repl)}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+       else
+           # Remove the placeholder entirely if feature disabled
+        awk '{gsub(/@@SCRIPT_MAX_FAIL@@/, "")}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+       fi
+    fi
+
+    ########################
+    # 4. Wipe on fail
+    ########################
+    if [[ "$WIPE_ON_FAIL" == "true" ]]; then
+        WIPE_SCRIPT=$(<$CUSTOM_SCRIPTS_DIR/wipe_on_fail)
+        awk -v repl="$WIPE_SCRIPT" '{gsub(/@@WIPE_ON_FAIL@@/, repl)}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+    else
+        awk '{gsub(/@@WIPE_ON_FAIL@@/, "")}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+    fi
+
+    ########################
+    # 5. Crypto option
+    ########################
+    case "$CRYPTO" in
+        "openssl")
+            CRYPTO_SCRIPT=$(<$CUSTOM_SCRIPTS_DIR/crypt_openssl)
+            ;;
+        "pgp")
+            CRYPTO_SCRIPT=$(<$CUSTOM_SCRIPTS_DIR/crypt_pgp)
+            ;;
+        *)
+            CRYPTO_SCRIPT=""
+            ;;
+    esac
+
+    if [[ -n "$CRYPTO_SCRIPT" ]]; then
+        awk -v repl="$CRYPTO_SCRIPT" '{gsub(/@@CRYPTO@@/, repl)}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+    else
+        awk '{gsub(/@@CRYPTO@@/, "")}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+    fi
+    
+    ########################
+    # 6. Validation options
+    ########################
+    IFS='|' read -r -a VALIDATION_ARRAY <<< "$VALIDATION"
+
+    declare -A VALIDATION_SCRIPTS
+    VALIDATION_SCRIPTS["sha512"]="sha512_hash"
+    VALIDATION_SCRIPTS["signature"]="signature"
+    VALIDATION_SCRIPTS["decryption"]="decryption"
+
+    for key in "${!VALIDATION_SCRIPTS[@]}"; do
+        if [[ " ${VALIDATION_ARRAY[*]} " == *" $key "* ]]; then
+            SCRIPT=$(<$CUSTOM_SCRIPTS_DIR/${VALIDATION_SCRIPTS[$key]})
+            awk -v repl="$SCRIPT" -v placeholder="@@${key^^}@@" '{gsub(placeholder,repl)}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+        else
+            # Remove placeholder if not selected
+            awk -v placeholder="@@${key^^}@@" '{gsub(placeholder,"")}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+        fi
+    done
+
+    ########################
+    # 7. Key store option
+    ########################
+    case "$KEY_STORE" in
+        "JCOP4")
+            KEY_SCRIPT=$(<$CUSTOM_SCRIPTS_DIR/key_jcop4)
+            ;;
+        "AT24C64")
+            KEY_SCRIPT=$(<$CUSTOM_SCRIPTS_DIR/key_at24c64)
+            ;;
+        "KEYSTORE")
+            KEY_SCRIPT=$(<$CUSTOM_SCRIPTS_DIR/key_store)
+            ;;
+        *)
+            KEY_SCRIPT=""
+            ;;
+    esac
+
+    if [[ -n "$KEY_SCRIPT" ]]; then
+        awk -v repl="$KEY_SCRIPT" '{gsub(/@@KEY_STORE@@/, repl)}1' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+    else
+        awk '{gsub(/@@KEY_STORE@@/, "")}1' "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+    fi
+
+    echo "Template processed -> $OUTPUT"
+
+    #
+    #
+    chmod +x "$BUILD_DIR/init"
     cd "$BUILD_DIR" >> "$LOG_PATH/build_securerd.log" 2>&1
     find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_securerd.log" | gzip -9 > "$BINARY_DIR/live/securerd.img"
 
-    #mv "$BUILD_DIR/initramfs-enc.img" "$BINARY_DIR/live/" >> "$LOG_PATH/build_securerd.log" 2>&1
 
     cd "$HOME_DIR" >> "$LOG_PATH/build_securerd.log" 2>&1
     #rm -r "$HOME_DIR/tmp"

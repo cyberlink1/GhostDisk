@@ -1,0 +1,10 @@
+gnupg
+gnupg-agent
+gnupg-pkcs11-scd
+pcscd
+libpcsclite1
+openssl
+initramfs-tools
+scdaemon
+cpio
+kexec-tools

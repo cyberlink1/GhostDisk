@@ -1,0 +1,64 @@
+full SLE4442 + host-side crypto workflow
+PCSC and a C crypto library
+Memory Layout (256 bytes)
+Offset	Field	Size	Notes
+0x00–0x03	Counter	4 B	Big-endian monotonic counter
+0x04–0x07	Metadata	4 B	Version, flags, algorithm ID
+0x08–0x27	HMAC	32 B	HMAC-SHA256 over `counter
+0x28–0x49	Encrypted key	36 B	Symmetrically encrypted Ed25519 key
+0x4A–0xFF	Reserved	182 B	Optional future use
+
+PIN Derivation (PBKDF2)
+Input: user PIN string (alphanumeric)
+Salt: store in metadata
+Iterations: 1000 (host-side)
+Output: 32-byte key → truncate first 3 bytes → SLE4442 PIN
+
+Counter Handling
+Counter is 4 bytes, big-endian
+Increment host-side, write byte-by-byte
+Verify counter is monotonically increasing before accepting key usage
+
+Encrypted Key Storage
+Symmetric encryption done host-side (AES-256, ChaCha20, Ed25519)
+Key stored at 0x28–0x49 (36 bytes)
+Write byte-by-byte after successful PIN verification
+
+HMAC for Integrity
+HMAC covers: counter || encrypted_key
+Output: 32 bytes → stored at 0x08–0x27
+Use host crypto library: SHA-256 + HMAC key (can be same as card key or separate)
+
+Reading Key
+Read counter, encrypted key, HMAC
+Recompute HMAC host-side
+Verify HMAC matches card
+Decrypt key
+
+Retry / Lock Handling
+
+SLE4442 allows 3 failed PIN attempts → locks protected area permanently
+Host should prevent accidental bad PINs:
+keep host-side retry counter
+Validate derived 3-byte PIN before sending to card (unit tests)
+
+Metadata: can lock after provisioning
+Counter, HMAC, key: keep unlocked
+| Byte | Value | Meaning                                                        |
+| ---- | ----- | -------------------------------------------------------------- |
+| 0x04 | 0x12  | Card ID (0–255)                                                |
+| 0x05 | 0x01  | Algorithm ID (0x01 = AES-256, 0x02 = ChaCha20, 0x03 = Ed25519) |
+| 0x06 | 0x1B  | Flags (bitfield)                                               |
+
+Flags Byte 0x1B
+| Bit | Feature             | 0 = disabled        | 1 = enabled                            |
+| --- | ------------------- | ------------------- | -------------------------------------- |
+| 0   | Card provisioned    | not initialized     | initialized and ready                  |
+| 1   | Write-protected key | key writable        | key locked after provisioning          |
+| 2   | Retry tracking      | host does not track | host tracks retries to prevent lockout |
+| 3   | HMAC enabled        | HMAC not required   | HMAC must be verified                  |
+| 4   | Counter enabled     | counter not checked | counter must increment/check           |
+| 5   | PBKDF2 PIN          | PIN is raw          | PIN derived via PBKDF2                 |
+| 6   | Reserved/future     | 0                   | 1 = future use                         |
+| 7   | Reserved/future     | 0                   | 1 = future use                         |
+

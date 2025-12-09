@@ -1,0 +1,23 @@
+#!/bin/bash
+
+#
+# This is the hook.binary to generate the signature files in /boot/live
+#
+HOME_DIR=".."
+BINARY_DIR="$(pwd)"
+
+# Load the config
+[ -f "$HOME_DIR/make_image.cfg" ] || { echo "Config file not found in $HOME_DIR!"; exit 1; }
+. "$HOME_DIR/make_image.cfg"
+
+LOG_PATH="$HOME_DIR/logs"
+
+if [ "$CRYPTO" = "openssl" ] && echo "$VALIDATION" | grep -q "signature"; then
+   for file in "$BINARY_DIR/live"/*; do 
+        if [ -f "$file" ]; then  # Make sure it's a file, not a directory
+            openssl dgst -sha512 -sign "$HOME_DIR/openssl/private.pem" -out "$BINARY_DIR/live/$(basename "$file").sig" "$file"
+        fi
+       done
+fi
+
+

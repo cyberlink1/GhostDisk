@@ -1,4 +1,3 @@
 fail_action() {
-    wipe_storage
     handle_reboot
 }

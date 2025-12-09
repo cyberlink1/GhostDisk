@@ -43,9 +43,9 @@ build_initramfs() {
     echo "Collecting Kernel Version"
     KVER=$(find "$HOME_DIR/tmp/chroot/lib/modules" -maxdepth 1 -type d -printf "%f\n" \
            | grep -E '^[0-9]' | head -n 1)
-    echo "Generating unique random UUID for partition identification"
-    PART_2_UUID="$(generate_uuid)"
-    echo "PART_2_UUID=$PART_2_UUID" > /tmp/uuid
+    #echo "Generating unique random UUID for partition identification"
+    #PART_2_UUID="$(generate_uuid)"
+    #echo "PART_2_UUID=$PART_2_UUID" > /tmp/uuid
     echo "Creating initramfs_mini"
     rm -rf "$BUILD_DIR" > "$LOG_PATH/build_initrd-menu.log" 2>&1
     sleep 1

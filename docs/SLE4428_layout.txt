@@ -1,0 +1,11 @@
+sle4428
++---------------------------------------------------------------------------------------+
+| Byte Offset | Field              | Size    | Notes                                    |
+| ----------- | ------------------ | ------- | ---------------------------------------- |
+| 0x00        | Counter            | 4 B     | Big endian 32-bit monotonic counter      |
+| 0x04        | Metadata           | 4 B     | Version, flags, algorithm ID             |
+| 0x08        | HMAC               | 32 B    | HMAC-SHA256 over counter + encrypted key |
+| 0x28        | Encrypted boot key | 32–64 B | AES-GCM/ChaCha20-Poly1305/Ed25519        |
+| 0x48        | Reserved / future  | ~208 B  | Optional future use                      |
++---------------------------------------------------------------------------------------+
+

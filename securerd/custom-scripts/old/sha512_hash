@@ -8,8 +8,7 @@ validate_checksums() {
     [ -f "$CHECKSUM_FILE" ] || exit 1
     echo "Validating boot environment"
     cd /boot
-    if sha512sum -c "$CHECKSUM_FILE" > /dev/null
-    then
+    if sha512sum -c "$CHECKSUM_FILE" > /dev/null; then
         echo "All files passed checksum verification"
     else
         echo "Checksum verification FAILED"

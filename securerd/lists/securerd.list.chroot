@@ -8,3 +8,4 @@ initramfs-tools
 scdaemon
 cpio
 kexec-tools
+opensc

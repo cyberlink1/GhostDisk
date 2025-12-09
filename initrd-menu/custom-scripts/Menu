@@ -17,41 +17,41 @@ attempts=0
 command -v dialog >/dev/null 2>&1 || { echo "dialog not found"; exit 1; }
 
 # extract root hash to detect invalid config
-ROOT_HASH=$(awk -F: '/^root:/ {print $2}' /etc/passwd)
+#ROOT_HASH=$(awk -F: '/^root:/ {print $2}' /etc/passwd)
 	
-if [ -z "$ROOT_HASH" ] || [ "$ROOT_HASH" = "!" ]; then
-    echo "ERROR: No root password set."
-    exit 1
-fi
+#if [ -z "$ROOT_HASH" ] || [ "$ROOT_HASH" = "!" ]; then
+#    echo "ERROR: No root password set."
+#    exit 1
+#fi
 
-while [ $attempts -lt $MAX_ATTEMPTS ]; do
-    # Ask password via dialog
-    pass=$(ask_password_once "Enter root password:")
+#while [ $attempts -lt $MAX_ATTEMPTS ]; do
+#    # Ask password via dialog
+#    pass=$(ask_password_once "Enter root password:")
     
-    # User cancelled
-    [ -z "$pass" ] && {
-        dialog --title "Cancelled" --msgbox "Password entry cancelled." 6 50 --stdout
-        exit 1
-    }
-
-    # Check password (replace pwcheck/pw_hash with your method)
-    if pwcheck "$pass" "$ROOT_HASH"; then
-        # Correct password → continue script
-        break
-    fi
+#    # User cancelled
+#    [ -z "$pass" ] && {
+#        dialog --title "Cancelled" --msgbox "Password entry cancelled." 6 50 --stdout
+#        exit 1
+#    }
+#
+#    # Check password (replace pwcheck/pw_hash with your method)
+#    if pwcheck "$pass" "$ROOT_HASH"; then
+#        # Correct password → continue script
+#        break
+#    fi
 
     # Incorrect password
-    attempts=$((attempts+1))
-    dialog --title "Incorrect Password" --msgbox \
-        "Password incorrect ($attempts/$MAX_ATTEMPTS)." 6 50 --stdout
-done
+#    attempts=$((attempts+1))
+#    dialog --title "Incorrect Password" --msgbox \
+#        "Password incorrect ($attempts/$MAX_ATTEMPTS)." 6 50 --stdout
+#done
 
 # Exceeded attempts
-if [ $attempts -ge $MAX_ATTEMPTS ]; then
-    echo "Too many failed attempts. Nuking..."
-    /sbin/nuke
-    exit 1
-fi
+#if [ $attempts -ge $MAX_ATTEMPTS ]; then
+#    echo "Too many failed attempts. Nuking..."
+#    /sbin/nuke
+#    exit 1
+#fi
 
 #############################
 # Helper functions

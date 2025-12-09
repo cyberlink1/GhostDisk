@@ -139,22 +139,25 @@ scan_for_device() {
         local dev_name
         dev_name=$(basename "$usb_dev")
 
-        # Expect two partitions: dev1 = ISO, dev2 = data
+        # Expect two partitions: dev1 = Legacy/Boot, dev2 = uefi/live, dev3=Persistent Storage
         local part1="/dev/${dev_name}1"
         local part2="/dev/${dev_name}2"
+        local part3="/dev/${dev_name}3"
 
-        # Both partitions must exist
+        # All 3 partitions must exist
         [ -e "$part1" ] || continue
         [ -e "$part2" ] || continue
+        [ -e "$part3" ] || continue
 
-        # Read UUID of partition 2
+        # Read UUID of partition 3
         local uuid
-        uuid=$(/usr/sbin/sgdisk -i 2 "/dev/${dev_name}" | awk -F': ' '/Partition unique GUID/ {print $2}' | tr -d '[:space:]')
+        uuid=$(/usr/sbin/sgdisk -i 3 "/dev/${dev_name}" | awk -F': ' '/Partition unique GUID/ {print $2}' | tr -d '[:space:]')
 
         # Compare to target UUID
         if [ "$uuid" = "$TARGET_UUID" ]; then
-            iso_dev="$part1"
-            data_dev="$part2"
+            bios_dev="$part1"
+            iso_dev="$part2"
+            data_dev="$part3"
             break
         fi
     done

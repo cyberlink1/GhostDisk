@@ -1,0 +1,6 @@
+#
+# This is the reboot_on_fail action
+#
+fail_action() {
+    handle_reboot
+}

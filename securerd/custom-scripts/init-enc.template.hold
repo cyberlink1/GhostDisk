@@ -15,17 +15,16 @@ trap handle_reboot HUP TERM INT TSTP
 
 @@FAIL_ACTION@@
 
-
 #
 # Set vars for init
 #
-@@VAR_MAX_FAIL@@
+#@@VAR_MAX_FAIL@@
 PERSISTENT_UUID="@@UUID@@"
 
 # --- injected functions ---
-@@BOOT_PROMPT@@
-@@BOOT_METHOD@@
-@@FAIL_ACTION@@
+#@@BOOT_PROMPT@@
+#@@BOOT_METHOD@@
+#@@FAIL_ACTION@@
 # -------------------------
 
 #
@@ -40,7 +39,7 @@ mount -t tmpfs tmpfs /run
 #
 # Load only the kernel modules we need
 #
-for m in libata ahci nvme-core nvme scsi_mod sd_mod sg xhci-pci xhci-hcd ehci-pci ehci-hcd ohci-pci ohci-hcd uas mmc_core mmc_block sdhci sdhci-pci usb-storage dm-mod dm-crypt essiv xts mbcache isofs jbd2 ext4 sr_mod cdrom virtio_scsi vfat nls_cp437 nls_iso8859-1; do
+for m in libata ahci nvme-core nvme scsi_mod sd_mod sg xhci-pci xhci-hcd ehci-pci ehci-hcd ohci-pci ohci-hcd uas mmc_core mmc_block sdhci sdhci-pci usb-storage dm-mod dm-crypt essiv xts mbcache isofs jbd2 ext4 sr_mod cdrom virtio_scsi; do
     modprobe "$m" || true
 done
 sleep 1
@@ -54,33 +53,22 @@ ln -sf fd/1 /dev/stdout
 ln -sf fd/2 /dev/stderr
 
 #
-# Make sure /dev is populated before we check for the boot device
-#
-for i in 1 2 3 4 5; do
-    [ -e /sys/block ] && mdev -s
-
-    # check if any /dev/sd* exists
-    found=0
-    for dev in /dev/sd*; do
-        [ -b "$dev" ] && found=1 && break
-    done
-
-    [ $found -eq 1 ] && break
-    sleep 1
-done
-#
 # Mount the /boot for access to initrd, securerd, and vmlinuz
 #
 mkdir /boot
-echo "Locating disk"
-for disk in /dev/nvme*n* /dev/mmcblk* /dev/sd*; do
+for disk in /dev/sd* /dev/nvme*n* /dev/mmcblk*; do
     [ -b "$disk" ] || continue
-    for part_num in 1 2 3; do
+    for part_num in 1 2; do
         uuid=$(sgdisk -i "$part_num" "$disk" 2>/dev/null | awk '/Partition unique GUID/ {print $4}')
         if [ "$uuid" = "$PERSISTENT_UUID" ]; then
-            # Found the marker partition, now mount partition 2
-            BOOT_PART="${disk}2"
-            mount -t vfat -o iocharset=iso8859-1 $BOOT_PART /boot
+            # Found the marker partition, now mount partition 1
+            BOOT_PART="${disk}1"
+            
+            # Setup loop device for the ISO inside partition 1
+            ISO_LOOP=$(losetup -fP --show "$BOOT_PART")
+            
+            # Mount the ISO's internal partition 1 (the actual filesystem)
+            mount "${ISO_LOOP}p1" /boot && break 2
         fi
     done
 done
@@ -94,7 +82,7 @@ if [ -z "$BOOT_PART" ] && [ -b /dev/sr0 ]; then
     BOOT_PART="/dev/sr0"
 fi
 
-@@SHA512@@
+#@@SHA512@@
 
 #
 # Check the command line and pull in
@@ -108,8 +96,8 @@ for p in $(cat /proc/cmdline); do
     esac
 done
 
-@@SIGNATURE@@
-@@BOOT_AUTH@@
+#@@SIGNATURE@@
+#@@BOOT_AUTH@@
 
 #
 # Function to kexec switch to the initrd2 and kernel2 to continue the boot

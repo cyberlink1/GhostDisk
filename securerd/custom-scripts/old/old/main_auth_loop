@@ -1,0 +1,26 @@
+#
+# Main loop
+#
+fail_count=0
+while true; do
+    BOOT_PASS=$(prompt_boot)
+
+    if validate_boot "$BOOT_PASS"; then
+        break  # success
+    fi
+
+    fail_count=$((fail_count + 1))
+    echo "Invalid password ($fail_count/$MAX_FAILED)"
+
+    if [ "$fail_count" -ge "$MAX_FAILED" ]; then
+        if [ "$WIPE_ON_FAIL" = "true" ]; then
+            echo "Maximum attempts reached — wiping persistent storage!"
+            wipe_storage
+        fi
+        echo "Maximum attempts reached — powering off!"
+        handle_reboot
+    fi
+done
+
+# Remove sensitive data from memory
+unset BOOT_PASS

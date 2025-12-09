@@ -248,6 +248,9 @@ d|./lib/modules/@KERNEL@/kernel/fs/squashfs|
 f|./lib/modules/@KERNEL@/kernel/fs/squashfs/squashfs.ko.xz|
 d|./lib/modules/@KERNEL@/kernel/fs/cachefiles|
 f|./lib/modules/@KERNEL@/kernel/fs/cachefiles/cachefiles.ko.xz|
+d|./lib/modules/@KERNEL@/kernel/fs/nls|
+f|./lib/modules/@KERNEL@/kernel/fs/nls/nls_cp437.ko.xz|
+f|./lib/modules/@KERNEL@/kernel/fs/nls/nls_iso8859-1.ko.xz|
 d|./lib/modules/@KERNEL@/kernel/drivers|
 d|./lib/modules/@KERNEL@/kernel/drivers/mmc|
 d|./lib/modules/@KERNEL@/kernel/drivers/mmc/core|
@@ -698,3 +701,12 @@ l|./bin/logread|busybox
 l|./bin/date|busybox
 s|./sbin/pwcheck|
 s|./sbin/wipe_ram|
+# Smartcard tools
+f|./usr/bin/opensc-tool|
+f|./lib/x86_64-linux-gnu/libopensc.so.12.0.2|
+l|./lib/x86_64-linux-gnu/libopensc.so.12|libopensc.so.12.0.2
+f|./lib/x86_64-linux-gnu/libeac.so.3.0.1|
+l|./lib/x86_64-linux-gnu/libeac.so.3|libeac.so.3.0.1
+f|./lib/x86_64-linux-gnu/libpcre2-8.so.0.14.0|
+l|./lib/x86_64-linux-gnu/libpcre2-8.so.0|libpcre2-8.so.0.14.0
+f|./usr/bin/pkcs15-tool|

@@ -1,4 +1,0 @@
-boot_prompt() {
-    :  # no password needed
-}
-

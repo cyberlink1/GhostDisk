@@ -1,3 +1,0 @@
-fail_action() {
-    handle_reboot
-}

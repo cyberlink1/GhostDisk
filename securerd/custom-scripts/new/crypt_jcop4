@@ -1,5 +1,0 @@
-boot_method() {
-    echo "Waiting for JCOP4 card..."
-    sleep 1
-    return 0
-}

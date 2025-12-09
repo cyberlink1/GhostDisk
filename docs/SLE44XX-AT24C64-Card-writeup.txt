@@ -1,0 +1,153 @@
+===============================================================================
+SLE4442 Smartcard Integration Concept
+(AT24C64 / SLE4428 Compatibility Intent)
+===============================================================================
+
+This document describes the intended design for integrating low-cost memory-
+type smartcards (AT24C64, SLE4442, SLE4428) into a cryptographic authentication
+workflow. These cards are NOT true microcontroller smartcards — they are
+EPROM-style storage devices with optional PIN protection. However, they are
+inexpensive, readily available, and can be leveraged as secure key containers
+paired with host-side cryptographic enforcement.
+
+The original goal was to support these legacy cards through the ACS ACR39U
+reader. While ACR39U can fully interface with SLE-series cards, there is NO
+existing middleware, making custom development necessary. AT24C64 cards further
+complicate this by requiring an external I2C interface — often the same cost as
+the ACR39U itself.
+
+I have experience writing C for microcontrollers but do not currently feel
+confident enough to implement the full provisioning stack and PC/SC middleware.
+Therefore, this README serves as a design reference and invitation for
+collaboration. Any developers willing to help build the required utilities are
+welcome.
+
+===============================================================================
+Concept Overview
+===============================================================================
+
+Although these cards lack onboard crypto, the idea is to store symmetric-
+encrypted private keys and enforce:
+
+  - Host-side cryptography (Ed25519, AES-256 / ChaCha20, HMAC-SHA256)
+  - Host-side PIN verification
+  - Integrity validation using a stored HMAC
+  - Anti-replay protection using a monotonic counter
+
+Security is NOT comparable to true secure-element smartcards (e.g., JCOP4),
+but may be appropriate for education, hobby projects, and low-risk
+authentication systems.
+
+===============================================================================
+Card Memory Layout — SLE4442 (256 bytes)
+===============================================================================
+
+Offset      Field            Size  Description
+----------  ---------------  ----  ----------------------------------------
+0x00–0x03  Counter           4B    Monotonic, big-endian
+0x04–0x07  Metadata          4B    Version, flags, algorithm ID, salt index
+0x08–0x27  HMAC             32B    HMAC-SHA256(counter || encrypted_key)
+0x28–0x49  Encrypted Key    36B    Symmetric-encrypted Ed25519 key
+0x4A–0xFF  Reserved         182B   Future expansion
+
+All crypto operations occur on the host.
+
+===============================================================================
+PIN Handling & Derivation
+===============================================================================
+
+PIN is NOT stored in plaintext. Instead:
+
+  Input: User PIN string (alphanumeric)
+  KDF: PBKDF2-HMAC-SHA256 (host-side)
+  Iterations: 1000
+  Salt: Stored in metadata
+  Output: 32-byte key → first 3 bytes truncated for SLE4442 PIN format
+
+Used for:
+  - Card write protection
+  - Key unlock authorization
+
+===============================================================================
+Counter Enforcement
+===============================================================================
+
+  - 4-byte unsigned big-endian value
+  - Incremented only host-side
+  - Written per-byte after successful PIN verification
+  - On read: verify monotonic increase
+  - Provides replay/rollback protection
+
+===============================================================================
+Key Encryption
+===============================================================================
+
+  - Ed25519 private key → 36-byte compact representation
+  - Encrypted using host crypto library (AES-256 or ChaCha20)
+  - Stored only after HMAC + PIN validation
+
+===============================================================================
+HMAC Integrity Protection
+===============================================================================
+
+  - HMAC-SHA256 calculated over:
+        counter || encrypted_key
+  - Stored at 0x08–0x27
+  - Recomputed on read → must match before key usage
+
+Purpose:
+  - Detect tampering
+  - Prevent unauthorized cloning
+
+===============================================================================
+Key Retrieval Workflow
+===============================================================================
+
+1. Read counter, encrypted key, and HMAC
+2. Recompute HMAC host-side → verify match
+3. Derive key-unlock crypto key from PIN
+4. Decrypt stored Ed25519 key
+5. Validate counter policy → allow usage
+
+===============================================================================
+Required Host-Side Components
+===============================================================================
+
+  - C PC/SC middleware for SLE4442 card access
+  - C cryptographic library (OpenSSL, libsodium, or equivalent)
+  - Provisioning tool for initial setup
+  - Authentication agent for usage/read flows
+
+===============================================================================
+Collaboration
+===============================================================================
+
+If you are familiar with:
+
+  - PC/SC API
+  - Low-level APDU-style card access
+  - C cryptography libraries
+
+…and would like to assist in developing:
+
+  - Provisioning tool (write → set PIN → store keys)
+  - Secure read utility for authentication workflows
+
+Please reach out! Contributions and improvements are highly welcome.
+
+===============================================================================
+Security Disclaimer
+===============================================================================
+
+These cards are NOT secure elements. Physical attackers can potentially:
+
+  - Extract EEPROM data with proper tools
+  - Bypass PIN limits using chip-level access
+
+This design assumes attackers cannot physically extract card memory or tamper
+with the host runtime.
+
+===============================================================================
+End of README
+===============================================================================
+

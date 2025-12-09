@@ -139,13 +139,17 @@ Please reach out! Contributions and improvements are highly welcome.
 Security Disclaimer
 ===============================================================================
 
-These cards are NOT secure elements. Physical attackers can potentially:
+This design assumes that attackers MAY physically extract or clone card memory
+and MAY tamper with a compromised host runtime. Protection is based on
+cryptographic secrecy rather than card hardware security.
 
-  - Extract EEPROM data with proper tools
-  - Bypass PIN limits using chip-level access
+- Private keys are always stored encrypted
+- PIN-derived key material is never written to the card
+- HMAC and a monotonic counter prevent rollback or tampering
+- Offline brute-force is limited by PBKDF2 cost and counter checks
 
-This design assumes attackers cannot physically extract card memory or tamper
-with the host runtime.
+Physical access to the card alone, or a full EEPROM dump, does NOT reveal key
+material or allow unauthorized signing operations.
 
 ===============================================================================
 End of README

@@ -19,6 +19,19 @@ LISTS_SRC="$HOME_DIR/GhostDisk/lists"
 LISTS_DST="$HOME_DIR/config/package-lists"
 
 mkdir -p "$LOG_PATH"
+create_openssl_signature_keys() {
+    #
+    # Create directory
+    #
+    mkdir "$HOME_DIR/openssl"
+    cd "$HOME_DIR/openssl"
+    echo "Generating Openssl key pair"
+    openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:4096 2>/dev/null
+    echo "Extracting Public Key"
+    openssl pkey -in private.pem -pubout -out public.pem
+    cd "$HOME_DIR"
+}
+
 generate_uuid() {
     # Generates a random UUID
     if command -v uuidgen >/dev/null 2>&1; then
@@ -146,56 +159,125 @@ clean() {
 	rm -r "$HOME_DIR/tmp" || true
 	rm -r "$HOME_DIR/securerd-init" || true
 	rm -r "/tmp/uuid" || true
+	rm -r "$HOME_DIR/openssl" || true
 	rm "$HOME_DIR/initrd-menu/custom-scripts/functions.sh" || true
         rm "$HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh" || true
 	echo "Done"
 }
 
-build_img(){
-     #
-     # We use the iso to build a disk image
-     #
-     ISO_PATH="$HOME_DIR/Yersinia-amd64.hybrid.iso"
-     IMG_PATH="$HOME_DIR/Yersinia.img"
-     SECOND_PART_SIZE=1
-     BUFFER_SIZE=10
-     echo "Building image from ISO"
-     # Calculate ISO size in MB (rounded up)
-	ISO_SIZE_BYTES=$(stat -c%s "$ISO_PATH")
-	ISO_SIZE_MB=$(( (ISO_SIZE_BYTES + 1024*1024 - 1) / (1024*1024) ))
-	FIRST_PART_SIZE=$(( ISO_SIZE_MB + BUFFER_SIZE ))
+build_img() {
+    #
+    # Build a bootable disk image from live-build binary output
+    # 3-partition layout: 1=BIOS-boot, 2=Boot/Live (FAT32), 3=extended-data
+    #
+    #
+    BINARY_DIR="$HOME_DIR/binary"
+    IMG_PATH="$HOME_DIR/Yersinia.img"
+    SECOND_PART_SIZE=1  # MB for extended-data
+    LOG_FILE="$HOME_DIR/logs/build_img.log"
+    
+    echo "Building disk image from live-build binary..." | tee -a "$LOG_FILE"
+    
+    # Verify binary directory exists
+    if [ ! -d "$BINARY_DIR/live" ]; then
+        echo "ERROR: '$BINARY_DIR/live' not found - run live-build first!" | tee -a "$LOG_FILE"
+        exit 1
+    fi
+    
+    # --- 1. Calculate required size ---
+    LIVE_SIZE=$(du -sb "$BINARY_DIR/live" | awk '{print $1}')
+    LIVE_SIZE_MB=$(( (LIVE_SIZE + 1024*1024 - 1) / (1024*1024) ))
+    
+    BOOT_SIZE_MB=$(( LIVE_SIZE_MB + 300 ))
+    TOTAL_SIZE_MB=$(( BOOT_SIZE_MB + SECOND_PART_SIZE + 10 ))
+    
+    echo "Live system: ${LIVE_SIZE_MB} MB, Total image: ${TOTAL_SIZE_MB} MB" | tee -a "$LOG_FILE"
+    
+    # --- 2. Create empty image ---
+    echo "Creating empty disk image..." | tee -a "$LOG_FILE"
+    dd if=/dev/zero of="$IMG_PATH" bs=1M count=$TOTAL_SIZE_MB status=progress 2>&1 | tee -a "$LOG_FILE"
+    
+    # --- 3. Create GPT partitions ---
+    echo "Creating GPT partitions..." | tee -a "$LOG_FILE"
+    
+    loopdev=$(losetup --show -fP "$IMG_PATH")
+    echo "Loop device: $loopdev" | tee -a "$LOG_FILE"
+ 
+    # Partition 1: BIOS boot (2 MiB)
+    # 2048 sectors start, 4095 sectors end (~2 MiB, 512B sectors)
+    sgdisk -n1:2048:4095 -t1:EF02 -c1:"BIOS" "$loopdev" >> "$LOG_FILE" 2>&1
 
-	echo "ISO size: ${ISO_SIZE_MB} MB, first partition will be ${FIRST_PART_SIZE} MB" > "$HOME_DIR/logs/build_img.log"
-	# Create empty image file
-	IMG_SIZE_MB=$(( FIRST_PART_SIZE + SECOND_PART_SIZE + 5 ))
-	echo "Creating empty image file of $IMG_SIZE_MB MB..." >> "$HOME_DIR/logs/build_img.log"
-	dd if=/dev/zero of="$IMG_PATH" bs=1M count=$IMG_SIZE_MB status=progress >> "$HOME_DIR/logs/build_img.log"
-	loopdev=$(losetup --show -fP "$IMG_PATH")
-	echo "Loop device created: $loopdev">> "$HOME_DIR/logs/build_img.log"
-        SECOND_PART_START=$FIRST_PART_SIZE
-        SECOND_PART_END=$((FIRST_PART_SIZE + SECOND_PART_SIZE))
-	# Create GPT partition table
-	parted -s "$loopdev" mklabel gpt >> "$HOME_DIR/logs/build_img.log"
+    # Partition 2: Boot/Live system (FAT32 for UEFI + live files)
+    # Start: 4096 sectors (approx 2 MiB), End: BOOT_SIZE_MB in sectors
+    BOOT_END_SECTOR=$((BOOT_SIZE_MB * 2048))  # 1 MiB = 2048 sectors
+    sgdisk -n2:4096:$BOOT_END_SECTOR -t2:EF00 -c2:"BOOT" "$loopdev" >> "$LOG_FILE" 2>&1
 
-	# Create partitions
-	parted -s "$loopdev" mkpart primary 1MiB "${FIRST_PART_SIZE}MiB" >> "$HOME_DIR/logs/build_img.log"
-	parted -s "$loopdev" mkpart primary "${SECOND_PART_START}MiB" "${SECOND_PART_END}MiB" >> "$HOME_DIR/logs/build_img.log"
+    # --- 3. Create partition 3: Extended data ---
+    echo "Creating extended-data partition (partition 3) with GUID $PART_2_UUID..." | tee -a "$LOG_FILE"
+    sgdisk -n3:0:0 -t3:8300 -c3:"extended-data" -u3:$PART_2_UUID "$loopdev" >> "$LOG_FILE" 2>&1
 
-	# Name partitions
-	parted -s "$loopdev" name 1 ISO >> "$HOME_DIR/logs/build_img.log"
-	parted -s "$loopdev" name 2 extended-data >> "$HOME_DIR/logs/build_img.log"
-
-	# Refresh partition table
-	partprobe "$loopdev" >> "$HOME_DIR/logs/build_img.log"
-
-	# Write ISO to first partition
-	echo "Writing ISO to ${loopdev}p1..." >> "$HOME_DIR/logs/build_img.log"
-	dd if="$ISO_PATH" of="${loopdev}p1" bs=4M conv=fsync >> "$HOME_DIR/logs/build_img.log" 2>&1
-	sgdisk --partition-guid=2:$PART_2_UUID "$loopdev" >> "$HOME_DIR/logs/build_img.log"
-	# Detach loop device
-	losetup -d "$loopdev" >> "$HOME_DIR/logs/build_img.log"
-
+    # Make sure kernel sees updated GPT    
+    partprobe "$loopdev"
+    sleep 2
+    
+    # --- 4. Format boot partition ---
+    echo "Formatting boot partition..." | tee -a "$LOG_FILE"
+    mkfs.vfat -F32 -n YERSINIA "${loopdev}p2" >> "$LOG_FILE" 2>&1
+    
+    # --- 5. Mount boot partition ---
+    BOOT_MOUNT="/tmp/boot_$$"
+    mkdir -p "$BOOT_MOUNT"
+    mount "${loopdev}p2" "$BOOT_MOUNT"
+    
+    # --- 6. Copy live system files (no hardlinks for FAT32) ---
+    echo "Copying live system..." | tee -a "$LOG_FILE"
+    mkdir -p "$BOOT_MOUNT/live"
+    # Use rsync with -L to follow symlinks instead of copying them
+    rsync -rL --info=progress2 "$BINARY_DIR/live/" "$BOOT_MOUNT/live/" 2>&1 | tee -a "$LOG_FILE"
+    
+    # --- 7. Setup EFI directory structure ---
+    echo "Setting up EFI boot..." | tee -a "$LOG_FILE"
+    mkdir -p "$BOOT_MOUNT/EFI/BOOT"
+    rsync -rL "$BINARY_DIR/EFI/boot/" "$BOOT_MOUNT/EFI/BOOT/" 2>&1 | tee -a "$LOG_FILE"
+    
+    # --- 8. Install GRUB for BIOS ---
+    echo "Installing GRUB for BIOS..." | tee -a "$LOG_FILE"
+    grub-install --target=i386-pc \
+                 --boot-directory="$BOOT_MOUNT/boot" \
+                 "$loopdev" >> "$LOG_FILE" 2>&1
+    
+    # --- 9. Install GRUB for UEFI ---
+    echo "Installing GRUB for UEFI..." | tee -a "$LOG_FILE"
+    grub-install --target=x86_64-efi \
+                 --efi-directory="$BOOT_MOUNT" \
+                 --boot-directory="$BOOT_MOUNT/boot" \
+                 --removable --recheck >> "$LOG_FILE" 2>&1
+    
+    # --- 10. Copy GRUB config ---
+    echo "Copying GRUB configuration..." | tee -a "$LOG_FILE"
+    mkdir -p "$BOOT_MOUNT/boot/grub"
+    rsync -r "$BINARY_DIR/boot/grub/" "$BOOT_MOUNT/boot/grub/" 2>&1 | tee -a "$LOG_FILE"
+    
+    # Verify grub.cfg exists
+    if [ ! -f "$BOOT_MOUNT/boot/grub/grub.cfg" ]; then
+        echo "ERROR: grub.cfg not found after copy!" | tee -a "$LOG_FILE"
+        find "$BOOT_MOUNT/boot/grub" -type f | tee -a "$LOG_FILE"
+        umount "$BOOT_MOUNT"
+        losetup -d "$loopdev"
+        exit 1
+    fi
+    
+    # --- 11. Cleanup ---
+    echo "Syncing and unmounting..." | tee -a "$LOG_FILE"
+    sync
+    umount "$BOOT_MOUNT"
+    rmdir "$BOOT_MOUNT"
+    losetup -d "$loopdev" >> "$LOG_FILE" 2>&1
+    
+    echo "Disk image build complete: $IMG_PATH" | tee -a "$LOG_FILE"
+    echo "Partitions: 1=BIOS-boot, 2=Boot/Live system, 3=extended-data (UUID marker)"
 }
+
 
 usage() {
     echo "Usage: $0 {chroot|initramfs|build|clean}"
@@ -211,11 +293,10 @@ case "$1" in
            echo "Chroot not found, building..."
            build_chroot
         fi
-        #build_initramfs
         ;;
     build)
+	create_openssl_signature_keys
         build_chroot
-        #build_initramfs
         build_iso
 	build_img
         ;;

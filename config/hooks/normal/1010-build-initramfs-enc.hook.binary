@@ -84,7 +84,15 @@ build_initramfs() {
     mkdir -p "$BUILD_DIR/etc/keys"
     NEW_ROOT_PASS="$(openssl rand -base64 192)"
     echo "$NEW_ROOT_PASS" > "$BUILD_DIR/etc/keys/root-pass"
-    openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$BUILD_DIR/etc/keys/root-pass" -out "$BUILD_DIR/etc/keys/root-pass.enc" -pass pass:"$ROOT_PASSWORD"
+    if [[ "${CRYPTO,,}" == "openssl" && "${VALIDATION,,}" =~ signature && "${KEY_STORE,,}" =~ keystore ]]; then
+	    openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$BUILD_DIR/etc/keys/root-pass" -out "$BUILD_DIR/etc/keys/root-pass.enc" -pass pass:"$ROOT_PASSWORD"
+    fi
+    if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature && "${KEY_STORE,,}" =~ keystore ]]; then
+      gpg --batch --yes --symmetric --cipher-algo AES256 \
+        --passphrase "$ROOT_PASSWORD" \
+        --output "$BUILD_DIR/etc/keys/root-pass.enc" \
+        "$BUILD_DIR/etc/keys/root-pass" 
+    fi
     rm "$BUILD_DIR/etc/keys/root-pass"
     echo "root:x:0:0:root:/root:/bin/sh" > "$BUILD_DIR/etc/passwd"
     echo "root:x:0:" > "$BUILD_DIR/etc/group"
@@ -122,39 +130,37 @@ build_initramfs() {
 
     # Copy template as starting point
     cp "$TEMPLATE" "$OUTPUT"
-
     ###################################
     # Helper function to inject a scriptlet
     ###################################
     inject_scriptlet() {
-    local placeholder="$1"
-    local script_file="$2"
-    if [[ ! -f "$script_file" ]]; then
-        echo "$script_file is missing" >> "$LOG_PATH/build_securerd.log"
-        exit 1
-    fi
-    awk -v placeholder="$placeholder" -v OUT="$OUTPUT" '
-        BEGIN {
-            # Read the entire scriptlet file into a single variable, preserving everything raw
-            while ((getline line < "'"$script_file"'") > 0) {
-                repl = repl line "\n"
+        local placeholder="$1"
+        local script_file="$2"
+        if [[ ! -f "$script_file" ]]; then
+            echo "$script_file is missing" >> "$LOG_PATH/build_securerd.log"
+            exit 1
+        fi
+        awk -v placeholder="$placeholder" -v OUT="$OUTPUT" '
+            BEGIN {
+                # Read the entire scriptlet file into a single variable, preserving everything raw
+                while ((getline line < "'"$script_file"'") > 0) {
+                    repl = repl line "\n"
+                }
+                close("'"$script_file"'")
+                # Escape & and \ in the replacement string for gsub
+                gsub(/\\/, "\\\\\\\\", repl)
+                gsub(/&/, "\\\\&", repl)
             }
-            close("'"$script_file"'")
-            # Escape & and \ in the replacement string for gsub
-            gsub(/\\/, "\\\\\\\\", repl)
-            gsub(/&/, "\\\\&", repl)
-        }
-        {
-            gsub(placeholder, repl)
-        }
-        1
-    ' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
+            {
+                gsub(placeholder, repl)
+            }
+            1
+        ' "$OUTPUT" > "$OUTPUT.tmp" && mv "$OUTPUT.tmp" "$OUTPUT"
     }
     ###################################
     # 1. Replace UUID
     ###################################
     sed -i "s|@@UUID@@|$PART_2_UUID|g" "$OUTPUT"
-
     ###################################
     # 2. Max failed login attempts
     ###################################
@@ -169,52 +175,50 @@ build_initramfs() {
         sed -i "s|@@VAR_MAX_FAIL@@||g" "$OUTPUT"
         sed -i "s|@@SCRIPT_MAX_FAIL@@||g" "$OUTPUT"
     fi
-
     ###################################
     # 3. FAIL_ACTION
     ###################################
-    if [[ "$WIPE_ON_FAIL" == "true" ]]; then
+    if [[ "${WIPE_ON_FAIL,,}" == "true" ]]; then
         inject_scriptlet "@@FAIL_ACTION@@" "$CUSTOM_SCRIPTS_DIR/wipe_on_fail"
     else
         inject_scriptlet "@@FAIL_ACTION@@" "$CUSTOM_SCRIPTS_DIR/reboot_on_fail"
     fi
-
     ###################################
     # 4. BOOT authentication
     ###################################
-    if [[ "$UNLOCK_BOOT" == "false" ]]; then
+    if [[ "${UNLOCK_BOOT,,}" == "false" ]]; then
         inject_scriptlet "@@BOOT_AUTH@@" "$CUSTOM_SCRIPTS_DIR/boot_noauth"
         inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_noauth"
         inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_noauth"
     else
         inject_scriptlet "@@BOOT_AUTH@@" "$CUSTOM_SCRIPTS_DIR/boot_auth"
  
-        case "$KEY_STORE" in
-            "keystore"|"KEYSTORE")
+        case "${KEY_STORE,,}" in
+            "keystore")
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_keystore"
-                if [[ "$CRYPTO" == "openssl" ]]; then
-		    cp "$HOME_DIR/openssl/public.pem" "$BUILD_DIR/etc/keys"
+                if [[ "${CRYPTO,,}" == "openssl" ]]; then
+                    cp "$HOME_DIR/openssl/public.pem" "$BUILD_DIR/etc/keys"
                     inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_openssl"
-                elif [[ "$CRYPTO" == "pgp" ]]; then
+                elif [[ "${CRYPTO,,}" == "pgp" ]]; then
                     cp "$HOME_DIR/gpg/public.asc" "$BUILD_DIR/etc/keys"
                     inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_pgp"
                 else
                     inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_noauth"
                 fi
                 ;;
-            "JCOP4")
+            "jcop4")
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_jcop4"
                 inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_jcop4"
                 ;;
-            "AT24C64")
+            "at24c64")
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_at24c64"
                 inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_AT24C64"
                 ;;
-            "SLE4428")
+            "sle4428")
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_sle4428"
                 inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_sle4428"
                 ;;
-            "SLE4442")
+            "sle4442")
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_sle4442"
                 inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_sle4442"
                 ;;
@@ -224,57 +228,69 @@ build_initramfs() {
                 ;;
         esac
     fi
-
     ###################################
     # 5. Validation scripts
     ###################################
     IFS='|' read -r -a VALIDATION_ARRAY <<< "$VALIDATION"
+    # Convert validation array to lowercase for case-insensitive comparison
+    VALIDATION_ARRAY_LOWER=()
+    for v in "${VALIDATION_ARRAY[@]}"; do
+        VALIDATION_ARRAY_LOWER+=("${v,,}")
+    done
+  
     declare -A VALIDATION_SCRIPTS=( ["sha512"]="sha512_hash" ["signature"]="signature" )
- 
+     
     for key in "${!VALIDATION_SCRIPTS[@]}"; do
         placeholder="@@${key^^}@@"
         found=false
-        for v in "${VALIDATION_ARRAY[@]}"; do
+        for v in "${VALIDATION_ARRAY_LOWER[@]}"; do
             if [[ "$v" == "$key" ]]; then
                 found=true
                 break
             fi
         done
-
         if [[ "$found" == "true" ]]; then
-            inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/${VALIDATION_SCRIPTS[$key]}"
+            # Special handling for signature with keystore
+            if [[ "$key" == "signature" ]] && [[ "${KEY_STORE,,}" == "keystore" ]]; then
+                if [[ "${CRYPTO,,}" == "openssl" ]]; then
+                    inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/signature_openssl"
+                elif [[ "${CRYPTO,,}" == "pgp" ]]; then
+                    inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/signature_pgp"
+                else
+                    inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/${VALIDATION_SCRIPTS[$key]}"
+                fi
+            else
+                inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/${VALIDATION_SCRIPTS[$key]}"
+            fi
         else
             sed -i "s|$placeholder||g" "$OUTPUT"
         fi
     done
-
     ###################################
     # 6. Key store helper (if used)
     ###################################
-    case "$KEY_STORE" in
-        "JCOP4")
+    case "${KEY_STORE,,}" in
+        "jcop4")
             inject_scriptlet "@@KEY_STORE@@" "$CUSTOM_SCRIPTS_DIR/key_jcop4"
             ;;
-        "AT24C64")
+        "at24c64")
             inject_scriptlet "@@KEY_STORE@@" "$CUSTOM_SCRIPTS_DIR/key_at24c64"
             ;;
-        "keystore"|"KEYSTORE")
+        "keystore")
             inject_scriptlet "@@KEY_STORE@@" "$CUSTOM_SCRIPTS_DIR/key_store"
             ;;
          *)
            sed -i "s|@@KEY_STORE@@||g" "$OUTPUT"
-            ;;
-    esac
-
+           ;;
+    esac    
     ###################################
     # 7. Cleanup: remove placeholders that are no longer used
     ###################################
     for ph in "@@CRYPTO@@" "@@DECRYPTION@@" "@@WIPE_ON_FAIL@@" "@@VALIDATION@@"; do
-        sed -i "s|$ph||g" "$OUTPUT"
+         sed -i "s|$ph||g" "$OUTPUT"
     done
    
     echo "Template processed -> $OUTPUT"
-
     #
     #
     chmod +x "$BUILD_DIR/init"

@@ -26,6 +26,8 @@ f|./usr/sbin/kexec|
 d|./etc/default/kexec|
 d|./etc/default/kexec.d|
 f|./usr/sbin/kexec-load-kernel|
+f|./bin/pinentry|
+f|./bin/pinentry-tty|
 #
 # Libraries needed
 #
@@ -136,6 +138,11 @@ f|./usr/lib/x86_64-linux-gnu/libpcsclite.so.1|
 f|./usr/lib/x86_64-linux-gnu/libpcsclite_real.so.1|
 f|./usr/lib/x86_64-linux-gnu/libcrypt.so.1.1.0|
 l|./usr/lib/x86_64-linux-gnu/libcrypt.so.1|libcrypt.so.1.1.0
+f|./lib/x86_64-linux-gnu/libp11-kit.so.0.4.5|
+l|./lib/x86_64-linux-gnu/libp11-kit.so.0|libp11-kit.so.0.4.5
+f|./lib/x86_64-linux-gnu/libncursesw.so.6.5
+l|./lib/x86_64-linux-gnu/libncursesw.so.6|libncursesw.so.6.5
+
 #
 # Kernel Modules needed
 #

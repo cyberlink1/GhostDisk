@@ -19,18 +19,6 @@ LISTS_SRC="$HOME_DIR/GhostDisk/lists"
 LISTS_DST="$HOME_DIR/config/package-lists"
 
 mkdir -p "$LOG_PATH"
-create_openssl_signature_keys() {
-    #
-    # Create directory
-    #
-    mkdir "$HOME_DIR/openssl"
-    cd "$HOME_DIR/openssl"
-    echo "Generating Openssl key pair"
-    openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:4096 2>/dev/null
-    echo "Extracting Public Key"
-    openssl pkey -in private.pem -pubout -out public.pem
-    cd "$HOME_DIR"
-}
 
 generate_uuid() {
     # Generates a random UUID
@@ -152,17 +140,21 @@ build_iso() {
 }
 
 clean() {
-	echo "Cleaning environment"
-        lb clean --purge 
-	rm -r "$BUILD_DIR" || true
-	rm -r "$HOME_DIR/logs/"* || true
-	rm -r "$HOME_DIR/tmp" || true
-	rm -r "$HOME_DIR/securerd-init" || true
-	rm -r "/tmp/uuid" || true
-	rm -r "$HOME_DIR/openssl" || true
-	rm "$HOME_DIR/initrd-menu/custom-scripts/functions.sh" || true
-        rm "$HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh" || true
-	echo "Done"
+    echo "Cleaning environment"
+
+    lb clean --purge
+
+    [ -d "$BUILD_DIR" ] && rm -r "$BUILD_DIR"
+    [ -d "$HOME_DIR/logs" ] && rm -r "$HOME_DIR/logs/"*
+    [ -d "$HOME_DIR/tmp" ] && rm -r "$HOME_DIR/tmp"
+    [ -d "$HOME_DIR/securerd-init" ] && rm -r "$HOME_DIR/securerd-init"
+    [ -d "/tmp/uuid" ] && rm -r "/tmp/uuid"
+    [ -d "$HOME_DIR/openssl" ] && rm -r "$HOME_DIR/openssl"
+    [ -d "$HOME_DIR/gpg" ] && rm -r "$HOME_DIR/gpg"
+    [ -f "$HOME_DIR/initrd-menu/custom-scripts/functions.sh" ] && rm "$HOME_DIR/initrd-menu/custom-scripts/functions.sh"
+    [ -f "$HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh" ] && rm "$HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh"
+
+    echo "Done"
 }
 
 build_img() {
@@ -295,7 +287,6 @@ case "$1" in
         fi
         ;;
     build)
-	create_openssl_signature_keys
         build_chroot
         build_iso
 	build_img

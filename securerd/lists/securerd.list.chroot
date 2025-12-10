@@ -9,3 +9,4 @@ scdaemon
 cpio
 kexec-tools
 opensc
+pinentry-tty

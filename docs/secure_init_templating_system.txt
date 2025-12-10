@@ -1,0 +1,10 @@
+| Placeholder         | Scriptlet                            | Function name
+| ------------------- | -------------------------------------|---------------------
+| @@FAIL_ACTION@@     | reboot_on_fail                       | fail_action
+| @@BOOT_AUTH@@       | boot_auth                            | boot_auth
+| @@BOOT_PROMPT@@     | boot_keystore                        | boot_prompt
+| @@BOOT_METHOD@@     | crypt_openssl                        | boot_method
+| @@SHA512@@          | sha512_hash                          | N/A
+| @@SIGNATURE@@       | signature_gpg/signature_openssl      | N/A
+| @@VAR_MAX_FAIL@@    | MAX_FAIL=3                           | N/A
+

@@ -1,0 +1,40 @@
+#!/bin/sh
+
+# Temporary keyring for verification
+tmpdir=$(mktemp -d)
+key="/etc/keys/public.asc"
+
+# Import the public key once
+gpg --batch --quiet --no-default-keyring --keyring "$tmpdir/pubring.kbx" --import "$key" >/dev/null 2>&1
+
+verify_signature() {
+    f="$1"
+    sig="/boot/live/$(basename "$f").sig"
+
+    [ -f "$sig" ] || return 1
+
+    # Verify signature using the pre-built temporary keyring
+    gpg --batch --quiet --no-default-keyring --keyring "$tmpdir/pubring.kbx" --verify "$sig" "$f" >/dev/null 2>&1
+    return $?
+}
+
+echo "Checking signature on securerd.img"
+verify_signature "/boot/live/securerd.img" || fail "I can not be trusted!"
+
+if [ -n "$INITRD2" ]; then
+    echo -n "Checking signature on initrd and vmlinuz"
+    verify_signature "/boot/$INITRD2" || fail "Initrd Failed signature check"
+    echo "...Pass"
+fi
+
+if [ -n "$KERNEL2" ]; then
+    echo -n "Checking signature vmlinuz"
+    verify_signature "/boot/$KERNEL2" || fail "Kernel Failed signature check"
+    echo "...Pass"
+fi
+
+# Clean up temporary keyring
+rm -rf "$tmpdir"
+
+echo "Signatures passed"
+

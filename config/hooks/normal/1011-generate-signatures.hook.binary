@@ -1,0 +1,43 @@
+#!/bin/bash
+
+#
+# This is the hook.binary to generate the signature files in /boot/live
+#
+HOME_DIR=".."
+BINARY_DIR="$(pwd)"
+
+# Load the config
+[ -f "$HOME_DIR/make_image.cfg" ] || { echo "Config file not found in $HOME_DIR!"; exit 1; }
+. "$HOME_DIR/make_image.cfg"
+
+LOG_PATH="$HOME_DIR/logs"
+
+if [[ "${CRYPTO,,}" = "openssl"  && "${VALIDATION,,}" =~ signature ]]; then
+   for file in "$BINARY_DIR/live"/*; do 
+        if [ -f "$file" ]; then  # Make sure it's a file, not a directory
+            openssl dgst -sha512 -sign "$HOME_DIR/openssl/private.pem" -out "$BINARY_DIR/live/$(basename "$file").sig" "$file"
+        fi
+       done
+fi
+
+if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature ]]; then
+	if [ ! -d "$HOME_DIR/gpg_home" ]; then
+          export GNUPGHOME="$HOME_DIR/gpg"  # ensure the right keyring
+
+          for file in "$BINARY_DIR/live"/*; do 
+              if [ -f "$file" ]; then
+                  gpg --batch --yes --detach-sign --local-user "user@example.com" \
+                      --output "$BINARY_DIR/live/$(basename "$file").sig" "$file"
+              fi
+         done
+        else
+	 export GNUPGHOME="$HOME_DIR/gpg_home"
+
+          for file in "$BINARY_DIR/live"/*; do 
+              if [ -f "$file" ]; then
+                  gpg --batch --yes --detach-sign \
+                      --output "$BINARY_DIR/live/$(basename "$file").sig" "$file"
+              fi
+         done
+    fi
+fi

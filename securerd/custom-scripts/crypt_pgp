@@ -1,0 +1,14 @@
+#
+# Validate password by attempting GPG symmetric decryption
+#
+boot_method() {
+    local boot_pass="$1"
+
+    # Test decrypt — discard output
+    if gpg --batch --quiet --yes --decrypt --passphrase "$boot_pass" --pinentry-mode loopback -o /dev/null /etc/keys/root-pass.enc 2>/dev/null; then
+        return 0  # password correct
+    else
+        return 1  # wrong password
+    fi
+}
+

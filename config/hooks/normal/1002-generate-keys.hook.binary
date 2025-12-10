@@ -1,0 +1,74 @@
+#!/bin/bash
+
+#
+# This is the hook.binary to generate the signature files in /boot/live
+#
+HOME_DIR=".."
+BINARY_DIR="$(pwd)"
+
+create_openssl_signature_keys() {
+    #
+    # Create directory
+    #
+    mkdir "$HOME_DIR/openssl"
+    cd "$HOME_DIR/openssl"
+    echo "Generating Openssl key pair"
+    openssl genpkey -algorithm RSA -out private.pem -pkeyopt rsa_keygen_bits:4096 2>/dev/null
+    echo "Extracting Public Key"
+    openssl pkey -in private.pem -pubout -out public.pem
+    cd "$HOME_DIR"
+}
+
+create_gpg_signature_keys() {
+if [ ! -d $HOME_DIR/gpg_home ]; then
+    mkdir -p "$HOME_DIR/gpg"
+    cd "$HOME_DIR/gpg" || exit
+    GPG_DIR="$HOME_DIR/gpg"
+    export GNUPGHOME="$GPG_DIR"
+    echo "Generating GPG key pair"
+
+    # Define batch parameters in a variable
+    read -r -d '' KEY_PARAMS <<EOF
+%no-protection
+Key-Type: RSA
+Key-Length: 4096
+Name-Real: User
+Name-Email: user@example.com
+Expire-Date: 0
+%commit
+EOF
+
+    # Generate the key from the variable
+    echo "$KEY_PARAMS" | gpg --batch --gen-key
+
+    # Export the private key
+    gpg --export-secret-keys --armor "user@example.com" > private.asc
+    # Export the public key
+    gpg --export --armor "user@example.com" > public.asc
+
+    cd "$HOME_DIR" || exit
+    echo "GPG keys generated in $HOME_DIR/gpg"
+else
+	export GNUPGHOME="$HOME_DIR/gpg_home"
+	mkdir "$HOME_DIR/gpg"
+	cd "$HOME_DIR/gpg" || exit
+	gpg --export --armor > public.asc
+fi
+
+}
+
+# Load the config
+[ -f "$HOME_DIR/make_image.cfg" ] || { echo "Config file not found in $HOME_DIR!"; exit 1; }
+. "$HOME_DIR/make_image.cfg"
+
+LOG_PATH="$HOME_DIR/logs"
+
+if [[ "${CRYPTO,,}" == "openssl" && "${VALIDATION,,}" =~ signature ]]; then
+    create_openssl_signature_keys
+fi
+
+if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature && "${KEY_STORE,,}" == "keystore" ]]; then
+    create_gpg_signature_keys
+fi
+
+

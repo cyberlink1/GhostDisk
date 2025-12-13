@@ -2,7 +2,10 @@ gnupg
 gnupg-agent
 gnupg-pkcs11-scd
 pcscd
+pcsc-tools
 libpcsclite1
+libacsccid1
+libccid
 openssl
 initramfs-tools
 scdaemon

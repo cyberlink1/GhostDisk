@@ -207,6 +207,7 @@ build_initramfs() {
                 fi
                 ;;
             "jcop4")
+		cp "$HOME_DIR/gpg_home/public-key.asc" "$BUILD_DIR/etc/keys"
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_jcop4"
                 inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_jcop4"
                 ;;
@@ -249,22 +250,34 @@ build_initramfs() {
                 break
             fi
         done
-        if [[ "$found" == "true" ]]; then
-            # Special handling for signature with keystore
-            if [[ "$key" == "signature" ]] && [[ "${KEY_STORE,,}" == "keystore" ]]; then
-                if [[ "${CRYPTO,,}" == "openssl" ]]; then
-                    inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/signature_openssl"
-                elif [[ "${CRYPTO,,}" == "pgp" ]]; then
+    if [[ "$found" == "true" ]]; then
+        if [[ "$key" == "signature" ]]; then
+            case "${KEY_STORE,,}" in
+                keystore)
+                    if [[ "${CRYPTO,,}" == "openssl" ]]; then
+                        inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/signature_openssl"
+                    elif [[ "${CRYPTO,,}" == "pgp" ]]; then
+                        inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/signature_pgp"
+                    else
+                        inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/${VALIDATION_SCRIPTS[$key]}"
+                    fi
+                    ;;
+                jcop4)
+		    [ ! -d "$BUILD_DIR/root" ] && mkdir "$BUILD_DIR/root"
+		    cp -a "$HOME_DIR/gpg" "$BUILD_DIR/root/.gnupg"
+		    rm "$BUILD_DIR/root/.gnupg/*.lock" "$BUILD_DIR/root/.gnupg/s.gpg-agent*" || true
                     inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/signature_pgp"
-                else
+                    ;;
+                *)
                     inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/${VALIDATION_SCRIPTS[$key]}"
-                fi
-            else
-                inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/${VALIDATION_SCRIPTS[$key]}"
-            fi
+                    ;;
+            esac
         else
-            sed -i "s|$placeholder||g" "$OUTPUT"
+            inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/${VALIDATION_SCRIPTS[$key]}"
         fi
+    else
+        sed -i "s|$placeholder||g" "$OUTPUT"
+    fi
     done
     ###################################
     # 6. Key store helper (if used)
@@ -295,7 +308,7 @@ build_initramfs() {
     #
     chmod +x "$BUILD_DIR/init"
     cd "$BUILD_DIR" >> "$LOG_PATH/build_securerd.log" 2>&1
-    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_securerd.log" | gzip -9 > "$BINARY_DIR/live/securerd.img"
+    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_securerd.log" | lzma -9 > "$BINARY_DIR/live/securerd.img"
 
 
     cd "$HOME_DIR" >> "$LOG_PATH/build_securerd.log" 2>&1

@@ -57,6 +57,10 @@ fi
 
 }
 
+jcop4_signature() {
+	echo "Signature in place"
+}
+
 # Load the config
 [ -f "$HOME_DIR/make_image.cfg" ] || { echo "Config file not found in $HOME_DIR!"; exit 1; }
 . "$HOME_DIR/make_image.cfg"
@@ -71,4 +75,7 @@ if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature && "${KEY_STORE,,
     create_gpg_signature_keys
 fi
 
+if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature && "${KEY_STORE,,}" == "jcop4" ]]; then
+    jcop4_signature
+fi
 

@@ -103,7 +103,7 @@ build_initramfs() {
     chroot "$BUILD_DIR" /bin/depmod -b / "$KVER" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
 
     cd "$BUILD_DIR" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
-    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initrd-menu.log" | gzip -9 > "$BINARY_DIR/live/initrd-menu.img"
+    find . -print0 | cpio --null -ov --format=newc -V 2>> "$LOG_PATH/build_initrd-menu.log" | lzma -9 > "$BINARY_DIR/live/initrd-menu.img"
 
     #mv "$BUILD_DIR/initramfs-mini.img" "$BINARY_DIR/live/" >> "$LOG_PATH/build_initrd-menu.log" 2>&1
 

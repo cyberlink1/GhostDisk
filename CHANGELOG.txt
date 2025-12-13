@@ -1,0 +1,18 @@
+1.5 (2025-12-??)
+  * Directory & Init System
+    - Redesigned directory layout
+    - Redesigned init templating system in securerd to support multiple authentication mechanisms
+  * Image Creation
+    - Completely redesigned .img file creation for more flexibility
+  * Security Features
+    - Implemented SHA-512 hash checking of /boot files
+    - Implemented signature checking of securerd, initrd, and vmlinux via OpenSSL keystore
+    - Implemented signature checking of securerd, initrd, and vmlinux via PGP keystore
+    - Implemented boot password using an encrypted blob via openssl
+    - Implemented boot password using an encrypted blob via pgp
+    - Implemented securerd passthrough after validation to requested initrd/vmlinuz
+    - Implimented signature with pre-created key
+    	-if gpg_home directory exists then sign with key in that directory
+  * Build Config
+    - Updated make_image.cfg with new options for chain-of-trust boot
+

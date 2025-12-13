@@ -7,10 +7,13 @@
 #
 d|./bin|
 d|./etc|
+d|./etc/hotplug|
 d|./usr|
 d|./usr/sbin|
 d|./usr/bin|
 f|./bin/bash|
+s|./etc/hotplug/acs.sh
+s|./etc/mdev.conf
 f|./usr/bin/cpio|
 f|./bin/busybox|
 f|./usr/sbin/pcscd|
@@ -28,6 +31,7 @@ d|./etc/default/kexec.d|
 f|./usr/sbin/kexec-load-kernel|
 f|./bin/pinentry|
 f|./bin/pinentry-tty|
+f|./usr/bin/pcsc_scan
 #
 # Libraries needed
 #
@@ -125,14 +129,24 @@ l|./lib/x86_64-linux-gnu/libffi.so.8|libffi.so.8.2.0
 l|./lib/x86_64-linux-gnu/libatomic.so.1|libatomic.so.1.2.0
 l|./lib/x86_64-linux-gnu/libgmodule-2.0.so.0|libgmodule-2.0.so.0.8600.2
 l|./lib/x86_64-linux-gnu/libmount.so.1|libmount.so.1.1.0
+f|./lib/x86_64-linux-gnu/libudev.so.1.7.12|
+l|./lib/x86_64-linux-gnu/libudev.so.1|libudev.so.1.7.12
+f|./lib/x86_64-linux-gnu/libcap.so.2.75|
+l|./lib/x86_64-linux-gnu/libcap.so.2|libcap.so.2.75
+f|./lib/x86_64-linux-gnu/libusb-1.0.so.0.5.0|
+l|./lib/x86_64-linux-gnu/libusb-1.0.so.0|libusb-1.0.so.0.5.0
 d|./usr/lib/pcsc|
 d|./usr/lib/pcsc/drivers|
-d|./usr/lib/pcsc/drivers/serial|
-f|./usr/lib/pcsc/drivers/serial/libccidtwin.so|
+d|./usr/lib/pcsc/drivers/ifd-acsccid.bundle|
+d|./usr/lib/pcsc/drivers/ifd-acsccid.bundle/Contents|
+f|./usr/lib/pcsc/drivers/ifd-acsccid.bundle/Contents/Info.plist|
+d|./usr/lib/pcsc/drivers/ifd-acsccid.bundle/Contents/Linux|
+f|./usr/lib/pcsc/drivers/ifd-acsccid.bundle/Contents/Linux/libacsccid.so|
 d|./usr/lib/pcsc/drivers/ifd-ccid.bundle|
 d|./usr/lib/pcsc/drivers/ifd-ccid.bundle/Contents|
 d|./usr/lib/pcsc/drivers/ifd-ccid.bundle/Contents/Linux|
 f|./usr/lib/pcsc/drivers/ifd-ccid.bundle/Contents/Linux/libccid.so|
+l|./lib/x86_64-linux-gnu/libccid.so|/usr/lib/pcsc/drivers/ifd-ccid.bundle/Contents/Linux/libccid.so
 f|./usr/lib/pcsc/drivers/ifd-ccid.bundle/Contents/Info.plist|
 f|./usr/lib/x86_64-linux-gnu/libpcsclite.so.1|
 f|./usr/lib/x86_64-linux-gnu/libpcsclite_real.so.1|
@@ -142,6 +156,23 @@ f|./lib/x86_64-linux-gnu/libp11-kit.so.0.4.5|
 l|./lib/x86_64-linux-gnu/libp11-kit.so.0|libp11-kit.so.0.4.5
 f|./lib/x86_64-linux-gnu/libncursesw.so.6.5
 l|./lib/x86_64-linux-gnu/libncursesw.so.6|libncursesw.so.6.5
+f|./lib/x86_64-linux-gnu/libksba.so.8.14.7|
+l|./lib/x86_64-linux-gnu/libksba.so.8|libksba.so.8.14.7
+d|./usr/lib/gnupg|
+f|./usr/lib/gnupg/dirmngr_ldap|
+f|./usr/lib/gnupg/gpg-auth|
+f|./usr/lib/gnupg/gpg-check-pattern|
+f|./usr/lib/gnupg/gpg-pair-tool|
+f|./usr/lib/gnupg/gpg-preset-passphrase|
+f|./usr/lib/gnupg/gpg-protect-tool|
+f|./usr/lib/gnupg/gpg-wks-client|
+f|./usr/lib/gnupg/keyboxd|
+f|./usr/lib/gnupg/scdaemon|
+f|./usr/bin/gpg-agent|
+f|./usr/bin/gpg-card|
+f|./usr/bin/gpgconf|
+f|./usr/bin/gpg-connect-agent|
+f|./usr/bin/gpg-wks-client|
 
 #
 # Kernel Modules needed
@@ -717,3 +748,6 @@ l|./lib/x86_64-linux-gnu/libeac.so.3|libeac.so.3.0.1
 f|./lib/x86_64-linux-gnu/libpcre2-8.so.0.14.0|
 l|./lib/x86_64-linux-gnu/libpcre2-8.so.0|libpcre2-8.so.0.14.0
 f|./usr/bin/pkcs15-tool|
+d|./usr/lib/udev|
+d|./usr/lib/udev/rules.d|
+f|./usr/lib/udev/rules.d/92-libacsccid1.rules|

@@ -20,6 +20,50 @@ LISTS_DST="$HOME_DIR/config/package-lists"
 
 mkdir -p "$LOG_PATH"
 
+#
+# If the user is using a JCOP4 Smart card, lets make sure it is in the system and we can see it
+# As well as validate we have everything we need and it is all setup correctly
+#
+if [[ "${KEY_STORE,,}" =~ jcop4 ]] && [[ "${VALIDATION,,}" =~ signature ]] && [[ ${1,,} == "build" ]]; then
+     if [ ! -d "$HOME_DIR/gpg_home" ] || [ ! -f "$HOME_DIR/gpg_home/public-key.asc" ]; then
+       echo "gpg_home does not exist, it must exist and contain your public key, with the filename public-key.asc, for jcop4 to work"
+       exit 1
+     else
+       chown -R 0:0 gpg_home > "$LOG_PATH/gpg.log"
+       chmod 700 gpg_home >> "$LOG_PATH/gpg.log"
+       chmod 600 gpg_home/public-key.asc >> "$LOG_PATH/gpg.log"
+       	mkdir -p "$HOME_DIR/gpg" >> "$LOG_PATH/gpg.log"
+	chmod 700 "$HOME_DIR/gpg" >> "$LOG_PATH/gpg.log"
+	export GNUPGHOME="$HOME_DIR/gpg" >> "$LOG_PATH/gpg.log"
+	echo "disable-ccid" > "$GNUPGHOME/scdaemon.conf"
+	echo "pcsc-shared" >> "$GNUPGHOME/scdaemon.conf"
+	echo "default-cache-ttl 300" > "$GNUPGHOME/gpg-agent.conf"
+	echo "max-cache-ttl 600" >> "$GNUPGHOME/gpg-agent.conf"
+	gpgconf --kill all >> "$LOG_PATH/gpg.log" 2>&1
+	gpgconf --launch gpg-agent >> "$LOG_PATH/gpg.log" 2>&1
+        gpg --import "$HOME_DIR/gpg_home/public-key.asc" >> "$LOG_PATH/gpg.log" 2>&1
+	until gpg --card-status 2>&1 | grep -q "Application ID"; do
+	    echo "Smartcard not detected, please insert it and press Enter..."
+	    read -p "" dummy
+	done
+	echo "Smartcard detected, proceeding..."
+	output=$(gpg --card-status --with-colons 2>/dev/null)
+	# Extract the forcepin value
+	forcepin_value=$(echo "$output" | grep '^forcepin:' | cut -d: -f2)
+	# Check if the value exists and act accordingly
+	if [[ -z "$forcepin_value" ]]; then
+	    echo "Could not find 'forcepin' status on the card."
+	elif [[ "$forcepin_value" == "1" ]]; then
+	    echo "Warning: Signature Pin is set to force. You should change it to not force."
+	    echo "Otherwise it will ask you to enter your pin for every signature"
+	    echo "This becomes an issue when signing 10+ files in the boot chain"
+	    read -r -p "Press Enter to continue or CTRL-C to stop..."
+	else
+	    echo "Signature Pin set to not force"
+	fi
+    fi
+fi
+
 generate_uuid() {
     # Generates a random UUID
     if command -v uuidgen >/dev/null 2>&1; then
@@ -151,6 +195,7 @@ clean() {
     [ -d "/tmp/uuid" ] && rm -r "/tmp/uuid"
     [ -d "$HOME_DIR/openssl" ] && rm -r "$HOME_DIR/openssl"
     [ -d "$HOME_DIR/gpg" ] && rm -r "$HOME_DIR/gpg"
+    [ -d "$HOME_DIR/mnt" ] && rm -r "$HOME_DIR/gpg"
     [ -f "$HOME_DIR/initrd-menu/custom-scripts/functions.sh" ] && rm "$HOME_DIR/initrd-menu/custom-scripts/functions.sh"
     [ -f "$HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh" ] && rm "$HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh"
 
@@ -180,7 +225,7 @@ build_img() {
     LIVE_SIZE=$(du -sb "$BINARY_DIR/live" | awk '{print $1}')
     LIVE_SIZE_MB=$(( (LIVE_SIZE + 1024*1024 - 1) / (1024*1024) ))
     
-    BOOT_SIZE_MB=$(( LIVE_SIZE_MB + 300 ))
+    BOOT_SIZE_MB=$(( LIVE_SIZE_MB + 100 ))
     TOTAL_SIZE_MB=$(( BOOT_SIZE_MB + SECOND_PART_SIZE + 10 ))
     
     echo "Live system: ${LIVE_SIZE_MB} MB, Total image: ${TOTAL_SIZE_MB} MB" | tee -a "$LOG_FILE"

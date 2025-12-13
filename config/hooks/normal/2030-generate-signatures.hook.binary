@@ -20,10 +20,9 @@ if [[ "${CRYPTO,,}" = "openssl"  && "${VALIDATION,,}" =~ signature ]]; then
        done
 fi
 
-if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature ]]; then
+if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature && "${KEY_STORE,,}" == "keystore" ]]; then
 	if [ ! -d "$HOME_DIR/gpg_home" ]; then
           export GNUPGHOME="$HOME_DIR/gpg"  # ensure the right keyring
-
           for file in "$BINARY_DIR/live"/*; do 
               if [ -f "$file" ]; then
                   gpg --batch --yes --detach-sign --local-user "user@example.com" \
@@ -35,9 +34,26 @@ if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature ]]; then
 
           for file in "$BINARY_DIR/live"/*; do 
               if [ -f "$file" ]; then
-                  gpg --batch --yes --detach-sign \
-                      --output "$BINARY_DIR/live/$(basename "$file").sig" "$file"
+                  gpg --batch --yes --detach-sign --output "$BINARY_DIR/live/$(basename "$file").sig" "$file"
               fi
          done
     fi
+fi
+if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature && "${KEY_STORE,,}" == "jcop4" ]]; then
+	  echo "Generating Signatures"
+          export GNUPGHOME="$HOME_DIR/gpg"  # ensure the right keyring
+	  CARDINFO="$(gpg --card-status --with-colons)"
+
+	  echo "$CARDINFO"
+  	  # Extract the signature key fingerprint (first key on the card)
+	  KEYID="$(echo "$CARDINFO" | awk -F: '/^fpr:/ {print $2; exit}')"
+          echo "Checking $KEYID"
+	  [ -n "$KEYID" ] || exit 2
+ 
+          for file in "$BINARY_DIR/live"/*; do 
+                if [ -f "$file" ]; then
+		    echo "$file"
+                    gpg --batch --yes --detach-sign --local-user "$KEYID" --output "$BINARY_DIR/live/$(basename "$file").sig" "$file"
+                fi
+         done
 fi

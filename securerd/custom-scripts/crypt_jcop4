@@ -1,8 +1,64 @@
 #
-# this is the crypt_jop4 file
+# Validate password by chalange/responce with jcop4
+#
+# create root-pass.enc
+# encrypt root-pass.enc with pub key
+# decrypt root-pass.end with card
 #
 boot_method() {
-    echo "Waiting for JCOP4 card..."
-    sleep 1
-    return 0
+#
+# Lets make sure the gpg-agent and scdaemon is running.
+#
+gpgconf --launch gpg-agent >/dev/null 2>&1
+
+gpg-connect-agent /bye >/dev/null 2>&1
+#
+# Lets populate the key stubs for the card
+#
+gpg --card-status >/dev/null 2>&1
+#
+# Create random key
+#
+KEY="$(openssl rand -hex 64)"
+echo "$KEY" > /etc/keys/root-pass.txt
+chmod 600 /etc/keys/root-pass.txt
+
+#
+# Collect encryption-capable public keys
+#
+RECIPS="$(gpg --list-keys --with-colons | awk -F: '$1=="sub" && $12 ~ /e/ {print $5}')"
+
+[ -z "$RECIPS" ] && {
+    echo "No encryption-capable GPG keys found"
+    rm -f /etc/keys/root-pass.txt
+    return 1
 }
+
+RECIP_ARGS=""
+for r in $RECIPS; do
+    RECIP_ARGS="$RECIP_ARGS -r $r"
+done
+
+gpg --encrypt --trust-model always -o /etc/keys/root-pass.enc $RECIP_ARGS /etc/keys/root-pass.txt || {
+        rm -f /etc/keys/root-pass.txt
+        return 1
+    }
+
+#
+# Remove plaintext secret
+#
+sync
+rm -f /etc/keys/root-pass.txt
+
+#
+# Test authorization with smartcard
+#
+if gpg --batch --quiet --yes --decrypt -o /dev/null /etc/keys/root-pass.enc 2>/dev/null; then
+    rm -f /etc/keys/root-pass.enc
+    return 0
+else
+    return 1
+fi
+
+}
+

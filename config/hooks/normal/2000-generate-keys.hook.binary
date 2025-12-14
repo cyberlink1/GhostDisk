@@ -44,7 +44,7 @@ EOF
     # Export the private key
     gpg --export-secret-keys --armor "user@example.com" > private.asc
     # Export the public key
-    gpg --export --armor "user@example.com" > public.asc
+    gpg --export --armor "user@example.com" > public-key.asc
 
     cd "$HOME_DIR" || exit
     echo "GPG keys generated in $HOME_DIR/gpg"
@@ -52,7 +52,7 @@ else
 	export GNUPGHOME="$HOME_DIR/gpg_home"
 	mkdir "$HOME_DIR/gpg"
 	cd "$HOME_DIR/gpg" || exit
-	gpg --export --armor > public.asc
+	gpg --export --armor > public-key.asc
 fi
 
 }

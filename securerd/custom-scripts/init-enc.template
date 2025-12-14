@@ -15,6 +15,10 @@ trap handle_reboot HUP TERM INT TSTP
 
 @@FAIL_ACTION@@
 
+fail() {
+    echo "$@" >/dev/console
+    halt -f
+}
 
 #
 # Set vars for init

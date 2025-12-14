@@ -130,6 +130,15 @@ build_initramfs() {
 
     # Copy template as starting point
     cp "$TEMPLATE" "$OUTPUT"
+
+    ###################################
+    # If we are dealing with a jop4 card lets setup the .gnupg diectory
+    ##################################
+    if [[ ${KEY_STORE,,} = "jcop4" ]]; then
+      [ ! -d "$BUILD_DIR/root" ] && mkdir "$BUILD_DIR/root"
+      cp -a "$HOME_DIR/gpg" "$BUILD_DIR/root/.gnupg"
+      rm "$BUILD_DIR/root/.gnupg/*.lock" "$BUILD_DIR/root/.gnupg/s.gpg-agent*" || true
+    fi
     ###################################
     # Helper function to inject a scriptlet
     ###################################
@@ -189,7 +198,7 @@ build_initramfs() {
     if [[ "${UNLOCK_BOOT,,}" == "false" ]]; then
         inject_scriptlet "@@BOOT_AUTH@@" "$CUSTOM_SCRIPTS_DIR/boot_noauth"
         inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_noauth"
-        inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_noauth"
+        inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_noauth"
     else
         inject_scriptlet "@@BOOT_AUTH@@" "$CUSTOM_SCRIPTS_DIR/boot_auth"
  
@@ -200,32 +209,32 @@ build_initramfs() {
                     cp "$HOME_DIR/openssl/public.pem" "$BUILD_DIR/etc/keys"
                     inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_openssl"
                 elif [[ "${CRYPTO,,}" == "pgp" ]]; then
-                    cp "$HOME_DIR/gpg/public.asc" "$BUILD_DIR/etc/keys"
+                    cp "$HOME_DIR/gpg/public-key.asc" "$BUILD_DIR/etc/keys"
                     inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_pgp"
                 else
-                    inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_noauth"
+                    inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_noauth"
                 fi
                 ;;
             "jcop4")
 		cp "$HOME_DIR/gpg_home/public-key.asc" "$BUILD_DIR/etc/keys"
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_jcop4"
-                inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_jcop4"
+                inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_jcop4"
                 ;;
             "at24c64")
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_at24c64"
-                inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_AT24C64"
+                inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_AT24C64"
                 ;;
             "sle4428")
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_sle4428"
-                inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_sle4428"
+                inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_sle4428"
                 ;;
             "sle4442")
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_sle4442"
-                inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_sle4442"
+                inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_sle4442"
                 ;;
             *)
                 inject_scriptlet "@@BOOT_PROMPT@@" "$CUSTOM_SCRIPTS_DIR/boot_noauth"
-                inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypto_noauth"
+                inject_scriptlet "@@BOOT_METHOD@@" "$CUSTOM_SCRIPTS_DIR/crypt_noauth"
                 ;;
         esac
     fi
@@ -263,9 +272,6 @@ build_initramfs() {
                     fi
                     ;;
                 jcop4)
-		    [ ! -d "$BUILD_DIR/root" ] && mkdir "$BUILD_DIR/root"
-		    cp -a "$HOME_DIR/gpg" "$BUILD_DIR/root/.gnupg"
-		    rm "$BUILD_DIR/root/.gnupg/*.lock" "$BUILD_DIR/root/.gnupg/s.gpg-agent*" || true
                     inject_scriptlet "$placeholder" "$CUSTOM_SCRIPTS_DIR/signature_pgp"
                     ;;
                 *)

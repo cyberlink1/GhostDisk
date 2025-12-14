@@ -24,7 +24,7 @@ mkdir -p "$LOG_PATH"
 # If the user is using a JCOP4 Smart card, lets make sure it is in the system and we can see it
 # As well as validate we have everything we need and it is all setup correctly
 #
-if [[ "${KEY_STORE,,}" =~ jcop4 ]] && [[ "${VALIDATION,,}" =~ signature ]] && [[ ${1,,} == "build" ]]; then
+if [[ "${KEY_STORE,,}" =~ jcop4 ]] && [[ ${1,,} == "build" ]]; then
      if [ ! -d "$HOME_DIR/gpg_home" ] || [ ! -f "$HOME_DIR/gpg_home/public-key.asc" ]; then
        echo "gpg_home does not exist, it must exist and contain your public key, with the filename public-key.asc, for jcop4 to work"
        exit 1
@@ -39,9 +39,11 @@ if [[ "${KEY_STORE,,}" =~ jcop4 ]] && [[ "${VALIDATION,,}" =~ signature ]] && [[
 	echo "pcsc-shared" >> "$GNUPGHOME/scdaemon.conf"
 	echo "default-cache-ttl 300" > "$GNUPGHOME/gpg-agent.conf"
 	echo "max-cache-ttl 600" >> "$GNUPGHOME/gpg-agent.conf"
+	echo "pinentry-program /bin/pinentry-tty" >> "$GNUPGHOME/gpg-agent.conf"
 	gpgconf --kill all >> "$LOG_PATH/gpg.log" 2>&1
 	gpgconf --launch gpg-agent >> "$LOG_PATH/gpg.log" 2>&1
         gpg --import "$HOME_DIR/gpg_home/public-key.asc" >> "$LOG_PATH/gpg.log" 2>&1
+	if [[ "${VALIDATION,,}" =~ signature ]]; then
 	until gpg --card-status 2>&1 | grep -q "Application ID"; do
 	    echo "Smartcard not detected, please insert it and press Enter..."
 	    read -p "" dummy
@@ -60,6 +62,7 @@ if [[ "${KEY_STORE,,}" =~ jcop4 ]] && [[ "${VALIDATION,,}" =~ signature ]] && [[
 	    read -r -p "Press Enter to continue or CTRL-C to stop..."
 	else
 	    echo "Signature Pin set to not force"
+	fi
 	fi
     fi
 fi
@@ -228,17 +231,17 @@ build_img() {
     BOOT_SIZE_MB=$(( LIVE_SIZE_MB + 100 ))
     TOTAL_SIZE_MB=$(( BOOT_SIZE_MB + SECOND_PART_SIZE + 10 ))
     
-    echo "Live system: ${LIVE_SIZE_MB} MB, Total image: ${TOTAL_SIZE_MB} MB" | tee -a "$LOG_FILE"
+    echo "Live system: ${LIVE_SIZE_MB} MB, Total image: ${TOTAL_SIZE_MB} MB"  >> "$LOG_FILE" 2>&1
     
     # --- 2. Create empty image ---
-    echo "Creating empty disk image..." | tee -a "$LOG_FILE"
-    dd if=/dev/zero of="$IMG_PATH" bs=1M count=$TOTAL_SIZE_MB status=progress 2>&1 | tee -a "$LOG_FILE"
+    echo "Creating empty disk image..." >> "$LOG_FILE" 2>&1
+    dd if=/dev/zero of="$IMG_PATH" bs=1M count=$TOTAL_SIZE_MB >> "$LOG_FILE" 2>&1
     
     # --- 3. Create GPT partitions ---
-    echo "Creating GPT partitions..." | tee -a "$LOG_FILE"
+    echo "Creating GPT partitions..."  >> "$LOG_FILE" 2>&1
     
     loopdev=$(losetup --show -fP "$IMG_PATH")
-    echo "Loop device: $loopdev" | tee -a "$LOG_FILE"
+    echo "Loop device: $loopdev" >>"$LOG_FILE"
  
     # Partition 1: BIOS boot (2 MiB)
     # 2048 sectors start, 4095 sectors end (~2 MiB, 512B sectors)
@@ -250,7 +253,7 @@ build_img() {
     sgdisk -n2:4096:$BOOT_END_SECTOR -t2:EF00 -c2:"BOOT" "$loopdev" >> "$LOG_FILE" 2>&1
 
     # --- 3. Create partition 3: Extended data ---
-    echo "Creating extended-data partition (partition 3) with GUID $PART_2_UUID..." | tee -a "$LOG_FILE"
+    echo "Creating extended-data partition (partition 3) with GUID $PART_2_UUID..." >> "$LOG_FILE"
     sgdisk -n3:0:0 -t3:8300 -c3:"extended-data" -u3:$PART_2_UUID "$loopdev" >> "$LOG_FILE" 2>&1
 
     # Make sure kernel sees updated GPT    
@@ -258,7 +261,7 @@ build_img() {
     sleep 2
     
     # --- 4. Format boot partition ---
-    echo "Formatting boot partition..." | tee -a "$LOG_FILE"
+    echo "Formatting boot partition..." >> "$LOG_FILE"
     mkfs.vfat -F32 -n YERSINIA "${loopdev}p2" >> "$LOG_FILE" 2>&1
     
     # --- 5. Mount boot partition ---
@@ -267,33 +270,33 @@ build_img() {
     mount "${loopdev}p2" "$BOOT_MOUNT"
     
     # --- 6. Copy live system files (no hardlinks for FAT32) ---
-    echo "Copying live system..." | tee -a "$LOG_FILE"
+    echo "Copying live system..." >> "$LOG_FILE"
     mkdir -p "$BOOT_MOUNT/live"
     # Use rsync with -L to follow symlinks instead of copying them
-    rsync -rL --info=progress2 "$BINARY_DIR/live/" "$BOOT_MOUNT/live/" 2>&1 | tee -a "$LOG_FILE"
+    rsync -rL "$BINARY_DIR/live/" "$BOOT_MOUNT/live/" >> "$LOG_FILE" 2>&1
     
     # --- 7. Setup EFI directory structure ---
-    echo "Setting up EFI boot..." | tee -a "$LOG_FILE"
+    echo "Setting up EFI boot..." >> "$LOG_FILE"
     mkdir -p "$BOOT_MOUNT/EFI/BOOT"
-    rsync -rL "$BINARY_DIR/EFI/boot/" "$BOOT_MOUNT/EFI/BOOT/" 2>&1 | tee -a "$LOG_FILE"
+    rsync -rL "$BINARY_DIR/EFI/boot/" "$BOOT_MOUNT/EFI/BOOT/" >> "$LOG_FILE" 2>&1
     
     # --- 8. Install GRUB for BIOS ---
-    echo "Installing GRUB for BIOS..." | tee -a "$LOG_FILE"
+    echo "Installing GRUB for BIOS..." >> "$LOG_FILE" 2>&1
     grub-install --target=i386-pc \
                  --boot-directory="$BOOT_MOUNT/boot" \
-                 "$loopdev" >> "$LOG_FILE" 2>&1
+                 "$loopdev" >> "$LOG_FILE" 2>&1 </dev/null
     
     # --- 9. Install GRUB for UEFI ---
-    echo "Installing GRUB for UEFI..." | tee -a "$LOG_FILE"
+    echo "Installing GRUB for UEFI..." >> "$LOG_FILE" 2>&1
     grub-install --target=x86_64-efi \
                  --efi-directory="$BOOT_MOUNT" \
                  --boot-directory="$BOOT_MOUNT/boot" \
-                 --removable --recheck >> "$LOG_FILE" 2>&1
+                 --removable --recheck >> "$LOG_FILE" 2>&1 </dev/null
     
     # --- 10. Copy GRUB config ---
-    echo "Copying GRUB configuration..." | tee -a "$LOG_FILE"
+    echo "Copying GRUB configuration..." >> "$LOG_FILE" 2>&1
     mkdir -p "$BOOT_MOUNT/boot/grub"
-    rsync -r "$BINARY_DIR/boot/grub/" "$BOOT_MOUNT/boot/grub/" 2>&1 | tee -a "$LOG_FILE"
+    rsync -r "$BINARY_DIR/boot/grub/" "$BOOT_MOUNT/boot/grub/" >> "$LOG_FILE" 2>&1 
     
     # Verify grub.cfg exists
     if [ ! -f "$BOOT_MOUNT/boot/grub/grub.cfg" ]; then
@@ -305,14 +308,13 @@ build_img() {
     fi
     
     # --- 11. Cleanup ---
-    echo "Syncing and unmounting..." | tee -a "$LOG_FILE"
+    echo "Syncing and unmounting..."  >> "$LOG_FILE" 2>&1
     sync
     umount "$BOOT_MOUNT"
     rmdir "$BOOT_MOUNT"
     losetup -d "$loopdev" >> "$LOG_FILE" 2>&1
     
     echo "Disk image build complete: $IMG_PATH" | tee -a "$LOG_FILE"
-    echo "Partitions: 1=BIOS-boot, 2=Boot/Live system, 3=extended-data (UUID marker)"
 }
 
 

@@ -1,11 +1,9 @@
-#!/bin/sh
-
 # Temporary keyring for verification
 tmpdir=$(mktemp -d)
-key="/etc/keys/public.asc"
+key="/etc/keys/public-key.asc"
 
 # Import the public key once
-gpg --batch --quiet --no-default-keyring --keyring "$tmpdir/pubring.kbx" --import "$key" >/dev/null 2>&1
+GNUPGHOME="$tmpdir" gpg --batch --quiet --no-use-agent --import "$key" >/dev/null 2>&1
 
 verify_signature() {
     f="$1"
@@ -14,7 +12,7 @@ verify_signature() {
     [ -f "$sig" ] || return 1
 
     # Verify signature using the pre-built temporary keyring
-    gpg --batch --quiet --no-default-keyring --keyring "$tmpdir/pubring.kbx" --verify "$sig" "$f" >/dev/null 2>&1
+    GNUPGHOME="$tmpdir" gpg --batch --quiet --no-default-keyring --keyring "$tmpdir/pubring.kbx" --verify "$sig" "$f" >/dev/null 2>&1
     return $?
 }
 

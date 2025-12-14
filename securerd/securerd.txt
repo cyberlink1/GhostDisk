@@ -12,7 +12,6 @@ d|./usr|
 d|./usr/sbin|
 d|./usr/bin|
 f|./bin/bash|
-s|./etc/hotplug/acs.sh
 s|./etc/mdev.conf
 f|./usr/bin/cpio|
 f|./bin/busybox|
@@ -737,7 +736,6 @@ l|./bin/seq|busybox
 l|./bin/init|busybox
 l|./bin/logread|busybox
 l|./bin/date|busybox
-s|./sbin/pwcheck|
 s|./sbin/wipe_ram|
 # Smartcard tools
 f|./usr/bin/opensc-tool|

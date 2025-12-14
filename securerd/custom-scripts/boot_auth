@@ -21,7 +21,7 @@ boot_auth() {
         # Call the injected fail action function if max attempts reached
         if [ "$MAX_FAIL" -gt 0 ] && [ "$fail_count" -ge "$MAX_FAIL" ]; then
             unset boot_pass
-            fail_action
+#            fail_action
         fi
 
         # Clean up sensitive data

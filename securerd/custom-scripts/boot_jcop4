@@ -1,0 +1,52 @@
+export LIBUSB_NO_UDEV=1
+export GNUPGHOME="/root/.gnupg"
+export GPG_TTY=/dev/console
+
+start_pcscd() {
+    PIDFILE=/run/pcscd/pcscd.pid
+
+    if [ -r "$PIDFILE" ]; then
+        PID="$(cat "$PIDFILE" 2>/dev/null)"
+        if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+            kill "$PID" 2>/dev/null
+            sleep 1
+        fi
+        rm -f "$PIDFILE" 2>/dev/null || true
+    fi
+    pcscd --disable-polkit
+}
+
+check_reader() {
+    pcsc_scan -r 2>/dev/null | grep -qE '^[0-9]+:'
+}
+
+check_card() {
+    pcsc_scan -c 2>/dev/null | grep -q "Card state: Card inserted"
+}
+
+boot_prompt() {
+    # Ensure interactive behavior even in $(...)
+    exec </dev/console >/dev/console 2>&1
+
+    start_pcscd
+
+    while true; do
+        if check_reader; then
+            if check_card; then
+                echo "Smart card reader and card detected."
+                echo "OK"   # something to satisfy command substitution
+                return 0
+            else
+                echo "Reader detected but no card inserted."
+                echo "Insert your smart card and press Enter..."
+                read _
+            fi
+        else
+            echo "No smart card reader found."
+            echo "Plug in the smart card reader and press Enter..."
+            read _
+            echo "Restarting pcscd..."
+            start_pcscd
+        fi
+    done
+}

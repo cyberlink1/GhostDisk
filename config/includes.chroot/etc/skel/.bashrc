@@ -111,3 +111,66 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
+#Switch_agent_script
+switch_ssh_agent() {
+    case "$1" in
+        local)
+            echo "Switching to local SSH keys..."
+            unset SSH_AUTH_SOCK
+            eval "$(ssh-agent -s)"
+            ssh-add ~/.ssh/id_rsa 2>/dev/null
+            ssh-add ~/.ssh/id_ed25519 2>/dev/null
+            ;;
+
+        openpgp)
+            echo "Switching to OpenPGP card keys..."
+            unset SSH_AUTH_SOCK
+            gpgconf --launch gpg-agent
+            export SSH_AUTH_SOCK="$(gpgconf --list-dirs agent-ssh-socket)"
+            ssh-add -L 1>/dev/null 2>&1
+            ;;
+
+        fido2)
+            echo "Switching to FIDO2 keys..."
+            unset SSH_AUTH_SOCK
+            eval "$(ssh-agent -s)"
+            # Load any keys from FIDO2 / YubiKey
+            # Adjust path if using yubikey-agent
+	    ssh-add ~/.ssh/id_ecdsa_sk
+            ssh-add -L 1>/dev/null 2>&1
+            ;;
+
+        *)
+            echo "Usage: switch_ssh_agent {local|openpgp|fido2}"
+            ;;
+    esac
+
+    echo "Current SSH_AUTH_SOCK: $SSH_AUTH_SOCK"
+    ssh-add -l 2>/dev/null || echo "No keys loaded"
+}
+
+openpgp () {
+	echo "[*] Restarting gpg-agent"
+	gpgconf --kill gpg-agent
+
+	echo "[*] Restarting pcscd"
+	if command -v systemctl >/dev/null; then
+	    systemctl restart pcscd.socket || systemctl restart pcscd
+	else
+	    pcscd --kill || true
+	    pcscd --daemon
+	fi
+
+	echo "[*] Clearing stale card cache"
+	rm -f ~/.gnupg/private-keys-v1.d/*.key
+
+	echo "[*] Launching gpg-agent"
+	gpgconf --launch gpg-agent
+
+	echo "[*] Forcing card re-scan"
+	gpg-connect-agent "scd serialno" "learn --force" /bye
+
+	echo "[*] Done"
+	gpg --card-status
+}
+

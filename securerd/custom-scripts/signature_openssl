@@ -26,6 +26,9 @@ if [ -n "$KERNEL2" ]; then
     echo -n "Checking signature vmlimuz"
     verify_signature "/boot/$KERNEL2" || fail "Kernel Failed signature check"
     echo "...Pass"
+    echo -n "Checking singature filesystem.squashfs"
+    verify_signature "/boot/live/filesystem.squashfs" || fail "filesystem.squashfs Failed signature check"
+    echo "...Pass"
 fi
 
 echo "Signatures passed"

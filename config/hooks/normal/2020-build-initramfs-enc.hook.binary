@@ -85,11 +85,11 @@ build_initramfs() {
     NEW_ROOT_PASS="$(openssl rand -base64 192)"
     echo "$NEW_ROOT_PASS" > "$BUILD_DIR/etc/keys/root-pass"
     if [[ "${CRYPTO,,}" == "openssl" && "${VALIDATION,,}" =~ signature && "${KEY_STORE,,}" =~ keystore ]]; then
-	    openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$BUILD_DIR/etc/keys/root-pass" -out "$BUILD_DIR/etc/keys/root-pass.enc" -pass pass:"$ROOT_PASSWORD"
+	    openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$BUILD_DIR/etc/keys/root-pass" -out "$BUILD_DIR/etc/keys/root-pass.enc" -pass pass:"$BOOT_PASSWORD"
     fi
     if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature && "${KEY_STORE,,}" =~ keystore ]]; then
       gpg --batch --yes --symmetric --cipher-algo AES256 \
-        --passphrase "$ROOT_PASSWORD" \
+        --passphrase "$BOOT_PASSWORD" \
         --output "$BUILD_DIR/etc/keys/root-pass.enc" \
         "$BUILD_DIR/etc/keys/root-pass" 
     fi

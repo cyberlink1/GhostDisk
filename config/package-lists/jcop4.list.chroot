@@ -1,0 +1,13 @@
+pcscd
+pcsc-tools
+libpcsclite1
+libacsccid1
+libccid
+opensc
+libeac3
+opensc-pkcs11
+scdaemon
+libpam-pkcs11
+libnss3-tools 
+gnupg
+polkitd

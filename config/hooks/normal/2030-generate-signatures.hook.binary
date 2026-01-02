@@ -21,7 +21,7 @@ if [[ "${CRYPTO,,}" = "openssl"  && "${VALIDATION,,}" =~ signature ]]; then
 fi
 
 if [[ "${CRYPTO,,}" == "pgp" && "${VALIDATION,,}" =~ signature && "${KEY_STORE,,}" == "keystore" ]]; then
-	if [ ! -d "$HOME_DIR/gpg_home" ]; then
+	if [ ! -d "$HOME_DIR/gpg_home" ] || [ ! -f "$HOME_DIR/gpg_home/public-key.asc" ]; then
           export GNUPGHOME="$HOME_DIR/gpg"  # ensure the right keyring
           for file in "$BINARY_DIR/live"/*; do 
               if [ -f "$file" ]; then

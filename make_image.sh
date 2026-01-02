@@ -93,6 +93,18 @@ build_chroot() {
 	    [ ${#files[@]} -gt 0 ] && cp "${files[@]}" "$HOME_DIR/tmp/config/package-lists/"
     lb bootstrap >> "$LOG_PATH/build_chroot.log" 2>&1
     lb chroot >> "$LOG_PATH/build_chroot.log" 2>&1
+    #
+    # Let make sure we include the smartcard file when building for a JCOP4 smartcard.
+    #
+    if [[ ${KEY_STORE,,} == "jcop4" ]]; then
+	    cat "$HOME_DIR/initrd-menu/initrd-menu-main.txt" > "$HOME_DIR/initrd-menu/initrd-menu.txt"
+	    cat "$HOME_DIR/initrd-menu/jcop4.txt" >> "$HOME_DIR/initrd-menu/initrd-menu.txt"
+	    cat "$HOME_DIR/securerd/securerd-main.txt" > "$HOME_DIR/securerd/securerd.txt"
+	    cat "$HOME_DIR/securerd/jcop4.txt" >> "$HOME_DIR/securerd/securerd.txt"
+    else
+	    cat "$HOME_DIR/securerd/securerd-main.txt" > "$HOME_DIR/securerd/securerd.txt"
+	    cat "$HOME_DIR/initrd-menu/initrd-menu-main.txt" > "$HOME_DIR/initrd-menu/initrd-menu.txt"
+    fi
 }
 
 build_iso() {
@@ -112,6 +124,7 @@ build_iso() {
  # Add the uuid to the luks-detect script
  #
  sed "s/@@UUID@@/$PART_2_UUID/" $HOME_DIR/GhostDisk/custom-scripts/luks-detect.sh.template > $HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh
+ chmod +x $HOME_DIR/config/includes.chroot/usr/local/sbin/luks-detect.sh
 
 #
 # Enable auto-rotate if it is set true in the config
@@ -174,6 +187,9 @@ build_iso() {
             done
             ;;
     esac    
+    if [ ${KEY_STORE,,} == "jcop4" ]; then
+	    cp -f "$LISTS_SRC/jcop4.list.chroot" "$LISTS_DST/"  >> "$LOG_PATH/build_iso.log" 2>&1
+    fi
     cd $HOME_DIR
     lb clean > "$LOG_PATH/build_iso.log" 2>&1
     lb config >> "$LOG_PATH/build_iso.log" 2>&1

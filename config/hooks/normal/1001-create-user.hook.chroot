@@ -10,7 +10,7 @@ useradd -m -s /bin/bash "$USERNAME"
 echo "$USERNAME:$PASSWORD" | chpasswd
 
 # Add to useful groups
-usermod -aG sudo,adm,cdrom,plugdev,audio,video,netdev "$USERNAME"
+usermod -aG sudo,adm,cdrom,plugdev,audio,video,netdev,pcscd "$USERNAME"
 
 # Optional: autologin for LightDM
 mkdir -p /etc/lightdm/lightdm.conf.d

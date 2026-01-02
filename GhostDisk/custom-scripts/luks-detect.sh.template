@@ -38,21 +38,23 @@ scan_for_usb_device() {
         local dev_name
         dev_name=$(basename "$usb_dev")
 
-        local part1="/dev/${dev_name}1"
-        local part2="/dev/${dev_name}2"
+        local part1="/dev/${dev_name}1"  # EFI
+        local part2="/dev/${dev_name}2"  # ISO
+        local part3="/dev/${dev_name}3"  # Data (LUKS)
 
-        # Both partitions must exist
+        # All three partitions must exist
         [ -e "$part1" ] || continue
         [ -e "$part2" ] || continue
+        [ -e "$part3" ] || continue
 
-        # Get UUID of partition 2 via sgdisk
+        # Get UUID of partition 3 (data) via sgdisk
         local uuid
-        uuid=$(/usr/sbin/sgdisk -i 2 "/dev/${dev_name}" | awk -F': ' '/Partition unique GUID/ {print $2}' | tr -d "'")
+        uuid=$(/usr/sbin/sgdisk -i 3 "/dev/${dev_name}" | awk -F': ' '/Partition unique GUID/ {print $2}' | tr -d "'")
 
         # Compare with target
         if [ "$uuid" = "$TARGET_UUID" ]; then
-            iso_dev="$part1"
-            data_dev="$part2"
+            iso_dev="$part2"
+            data_dev="$part3"
             break
         fi
     done
@@ -61,7 +63,6 @@ scan_for_usb_device() {
 
     # Return devices
     printf '%s %s\n' "$iso_dev" "$data_dev"
-    #printf '%s\n' "$data_dev"
 }
 
 main() {

@@ -85,7 +85,7 @@ build_initramfs() {
 
     mkdir -p "$BUILD_DIR"/{dev,proc,sys,tmp} >> "$LOG_PATH/build_initrd-menu.log" 2>&1
     
-    ROOT_HASH=$(openssl passwd -6 "$ROOT_PASSWORD")
+    ROOT_HASH=$(openssl passwd -6 "$BOOT_PASSWORD")
     echo "root:$ROOT_HASH:0:0:root:/root:/bin/sh" > "$BUILD_DIR/etc/passwd"
     echo "root:x:0:" > "$BUILD_DIR/etc/group"
 

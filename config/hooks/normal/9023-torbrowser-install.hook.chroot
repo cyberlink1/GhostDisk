@@ -1,10 +1,24 @@
 #!/bin/bash
 set -e
 
-# Variables
-TOR_VERSION="15.0a4"   # Example, can check latest
-TOR_URL="https://www.torproject.org/dist/torbrowser/${TOR_VERSION}/tor-browser-linux-x86_64-${TOR_VERSION}.tar.xz"
 DEST="/opt/tor-browser"
+TMP="/tmp/tor-browser.tar.xz"
+
+METADATA_URL="https://aus1.torproject.org/torbrowser/update_3/release/download-linux-x86_64.json"
+
+# Extract latest version from official metadata
+TOR_VERSION=$(wget -qO- "$METADATA_URL" \
+  | grep -oP '"version"\s*:\s*"\K[^"]+' \
+  | head -n 1)
+
+if [ -z "$TOR_VERSION" ]; then
+  echo "ERROR: Failed to determine latest Tor Browser version"
+  exit 1
+fi
+
+TOR_URL="https://www.torproject.org/dist/torbrowser/${TOR_VERSION}/tor-browser-linux-x86_64-${TOR_VERSION}.tar.xz"
+
+echo "Downloading Tor Browser ${TOR_VERSION}"
 
 # Create destination
 mkdir -p "$DEST"
@@ -12,25 +26,5 @@ mkdir -p "$DEST"
 # Download and extract
 wget -O /tmp/tor-browser.tar.xz "$TOR_URL"
 tar -xJf /tmp/tor-browser.tar.xz -C /opt
-#mv /opt/tor-browser/* "$DEST/"
 rm -rf /tmp/tor-browser.tar.xz
 chown -R 1000:1000 "$DEST"
-
-#set permissions
-#find ${DEST} -type d -exec chmod 755 {} \;
-#find ${DEST} -type f -exec chmod 644 {} \;
-
-# Make launcher executable
-#chmod +x "$DEST/Browser/start-tor-browser"
-#chmod +x "$DEST/Browser/start-tor-browser.desktop"
-#chmod +x "$DEST/Browser/execdesktop"
-#chmod +x "$DEST/Browser/firefox"
-#chmod +x "$DEST/Browser/firefox.real"
-#chmod +x "$DEST/Browser/glxtest"
-#chmod +x "$DEST/Browser/abicheck"
-#chmod +x "$DEST/Browser/updater"
-#chmod +x "$DEST/Browser/vaapitest"
-#chmod +x "$DEST/Browser/TorBrowser/Tor/tor"
-#chmod +x "$DEST/Browser/TorBrowser/Tor/PluggableTransports/*"
-
-

@@ -154,3 +154,4 @@ libtk8.6
 apparmor
 apparmor-utils
 gdisk
+fido2-tools
